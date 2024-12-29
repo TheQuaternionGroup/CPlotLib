@@ -8,6 +8,7 @@ LIB_DIR := lib
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
+# Name of the library to create
 LIB  := $(LIB_DIR)/libcpl.a
 
 # Look for glew and glfw3 libraries
