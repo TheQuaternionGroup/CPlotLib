@@ -8,6 +8,9 @@
 *.lo
 *.o
 *.obj
+obj/
+build/
+bin/
 
 # Precompiled Headers
 *.gch

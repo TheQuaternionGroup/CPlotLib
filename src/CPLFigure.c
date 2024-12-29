@@ -62,8 +62,8 @@ Figure* CreateFigure(int width, int height, const char* title)
         glfwTerminate();
         return NULL;
     }
-    GLuint vs = CompileShader(vsrc, GL_VERTEX_SHADER, 0);
-    GLuint fs = CompileShader(fsrc, GL_FRAGMENT_SHADER, 0);
+    GLuint vs = CompileShader(vsrc, GL_VERTEX_SHADER);
+    GLuint fs = CompileShader(fsrc, GL_FRAGMENT_SHADER);
     free(vsrc);
     free(fsrc);
 

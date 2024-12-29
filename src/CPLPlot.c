@@ -8,10 +8,10 @@
 //-------------------------------------
 // Simple text placeholder
 //-------------------------------------
-static void RenderText2D(const char *text, float x, float y, float r, float g, float b)
-{
-    (void)text; (void)x; (void)y; (void)r; (void)g; (void)b;
-}
+// static void RenderText2D(const char *text, float x, float y, float r, float g, float b)
+// {
+//     (void)text; (void)x; (void)y; (void)r; (void)g; (void)b;
+// }
 
 //-------------------------------------
 // Axis lines
