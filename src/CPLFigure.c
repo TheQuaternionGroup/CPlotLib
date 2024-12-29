@@ -3,10 +3,8 @@
 #include <string.h>
 
 #include "CPLFigure.h"
-#include "CPLUtils.h" // For ReadFile, CompileShader, LinkProgram, etc.
-
-#define SHADER_VERTEX_PATH   "shaders/vertex.glsl"
-#define SHADER_FRAGMENT_PATH "shaders/fragment.glsl"
+#include "CPLUtils.h" 
+#include "CPLShaders.h"
 
 Figure* CreateFigure(int width, int height, const char* title)
 {
@@ -50,22 +48,22 @@ Figure* CreateFigure(int width, int height, const char* title)
     glViewport(0,0,width,height);
 
     // Compile default line-drawing shaders 
-    char* vsrc = ReadFile(SHADER_VERTEX_PATH);
-    char* fsrc = ReadFile(SHADER_FRAGMENT_PATH);
-    if(!vsrc || !fsrc)
-    {
-        fprintf(stderr,"Failed to load shader files.\n");
-        if(vsrc) free(vsrc);
-        if(fsrc) free(fsrc);
-        glfwDestroyWindow(fig->window);
-        free(fig);
-        glfwTerminate();
-        return NULL;
-    }
+    char* vsrc = SHADER_VERTEX;
+    char* fsrc = SHADER_FRAGMENT;
+    // if(!vsrc || !fsrc)
+    // {
+    //     fprintf(stderr,"Failed to load shader files.\n");
+    //     if(vsrc) free(vsrc);
+    //     if(fsrc) free(fsrc);
+    //     glfwDestroyWindow(fig->window);
+    //     free(fig);
+    //     glfwTerminate();
+    //     return NULL;
+    // }
     GLuint vs = CompileShader(vsrc, GL_VERTEX_SHADER);
     GLuint fs = CompileShader(fsrc, GL_FRAGMENT_SHADER);
-    free(vsrc);
-    free(fsrc);
+    // free(vsrc);
+    // free(fsrc);
 
     fig->programID = LinkProgram(vs, fs);
     glDeleteShader(vs);
