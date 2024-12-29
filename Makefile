@@ -7,7 +7,7 @@ LIB_DIR := lib
 
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-LIB  := $(LIB_DIR)/cplotlib.a
+LIB  := $(LIB_DIR)/cpl.a
 
 # look for glew and glfw3 libraries
 CFLAGS += $(shell pkg-config --cflags glew glfw3)
