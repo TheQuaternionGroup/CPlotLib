@@ -11,54 +11,28 @@
 #include <GL/glew.h>
 
 struct CPL_PLOT_GL {
-    GLuint box_vbo;                 // The vertex buffer object
-    GLuint box_vao;                 // The vertex array object
-    size_t box_vbo_size;            // The size of the vertex buffer object
-    float vertices[20];             // The vertices of the plot
-    bool is_data_loaded;            // Whether or not the data has been loaded
+    GLuint box_vbo;        // The vertex buffer object for the box
+    GLuint box_vao;        // The vertex array object for the box
+    size_t box_vbo_size;   // Number of vertices (4)
+    float vertices[20];    // 4 vertices * (2 coords + 3 color)
+    bool is_data_loaded;   // Whether the data is ready to be drawn
 };
 
-static void build_plot_box_data(CPLPlot *plot)
-{
-    plot->gl_data = (CPL_PLOT_GL*)malloc(sizeof(CPL_PLOT_GL));
-    if (!plot->gl_data)
-    {
-        printf("Error: Could not allocate memory for plot data.\n");
-        return;
-    }
+/** Forward declarations **/
+static void setup_plot_box_shaders(CPLPlot* plot);
+static void build_plot_box_data(CPLPlot *plot);
+static void build_subplots_box_data(CPLFigure* fig, size_t rows, size_t cols, float margin);
 
-    plot->gl_data->box_vbo = 0;
-    plot->gl_data->box_vao = 0;
-
-    // Use normalized device coordinates (-1 to 1)
-    float margin = 0.1f; // 10% margin
-    float left = -1.0f + margin;
-    float right = 1.0f - margin;
-    float bottom = -1.0f + margin;
-    float top = 1.0f - margin;
-
-    // Define vertices for a box counter-clockwise
-    float vertices[20] = {
-        // Position (x,y)    // Color (r,g,b)
-        left,  top,         0.0f, 0.0f, 0.0f,  // Top left
-        right, top,         0.0f, 0.0f, 0.0f,  // Top right
-        right, bottom,      0.0f, 0.0f, 0.0f,  // Bottom right
-        left,  bottom,      0.0f, 0.0f, 0.0f   // Bottom left
-    };
-
-    memcpy(plot->gl_data->vertices, vertices, sizeof(vertices));
-}
+#pragma region Helpers
 
 static void setup_plot_box_shaders(CPLPlot* plot)
 {
-    if (!plot)
-    {
-        printf("Error: Could not setup plot box shaders.\n");
+    if (!plot) {
+        printf("Error: Could not setup plot box shaders. Plot is NULL.\n");
         return;
     }
-    if (!plot->gl_data)
-    {
-        printf("Error: Plot data is NULL.\n");
+    if (!plot->gl_data) {
+        printf("Error: Could not setup plot box shaders. Plot->gl_data is NULL.\n");
         return;
     }
     if (plot->gl_data->box_vao == 0) glGenVertexArrays(1, &plot->gl_data->box_vao);
@@ -66,275 +40,251 @@ static void setup_plot_box_shaders(CPLPlot* plot)
 
     glBindVertexArray(plot->gl_data->box_vao);
     glBindBuffer(GL_ARRAY_BUFFER, plot->gl_data->box_vbo);
-    glBufferData(GL_ARRAY_BUFFER, 20 * sizeof(float), plot->gl_data->vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,
+                 sizeof(plot->gl_data->vertices),
+                 plot->gl_data->vertices,
+                 GL_STATIC_DRAW);
 
+    // Position attribute (location=0)
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(
+        0, 
+        2, 
+        GL_FLOAT, 
+        GL_FALSE, 
+        5 * sizeof(float), 
+        (void*)0);
 
+    // Color attribute (location=1)
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
+    glVertexAttribPointer(
+        1, 
+        3, 
+        GL_FLOAT, 
+        GL_FALSE, 
+        5 * sizeof(float), 
+        (void*)(2 * sizeof(float)));
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    // We have 4 corners in the box
     plot->gl_data->box_vbo_size = 4;
-
 }
 
-static void makeOrthoMatrix(float left, float right, float bottom, float top, float* out)
+static void build_plot_box_data(CPLPlot *plot)
 {
-    float zNear=-1.f, zFar=1.f;
+    // Allocate the gl_data struct if not done yet
+    plot->gl_data = (CPL_PLOT_GL*)malloc(sizeof(CPL_PLOT_GL));
+    if (!plot->gl_data) {
+        printf("Error: Could not allocate memory for plot->gl_data.\n");
+        return;
+    }
+    memset(plot->gl_data, 0, sizeof(*plot->gl_data));
 
-    if(fabsf(right-left)<1e-14f)  right=left+1.f;
-    if(fabsf(top-bottom)<1e-14f)  top=bottom+1.f;
+    // Basic margin in NDC
+    float margin = 0.1f; // 10% margin
+    float left   = -1.0f + margin;
+    float right  =  1.0f - margin;
+    float bottom = -1.0f + margin;
+    float top    =  1.0f - margin;
 
-    out[0] =  2.f/(right-left);
-    out[1] =  0;
-    out[2] =  0;
-    out[3] =  0;
+    // Define the box as 4 corners (CCW) with color = plot->bg_color
+    float vertices[20] = {
+        // x,      y,      r,                  g,                  b
+        left,  top,    plot->bg_color.r, plot->bg_color.g, plot->bg_color.b,
+        right, top,    plot->bg_color.r, plot->bg_color.g, plot->bg_color.b,
+        right, bottom, plot->bg_color.r, plot->bg_color.g, plot->bg_color.b,
+        left,  bottom, plot->bg_color.r, plot->bg_color.g, plot->bg_color.b
+    };
 
-    out[4] =  0;
-    out[5] =  2.f/(top-bottom);
-    out[6] =  0;
-    out[7] =  0;
-
-    out[8] =  0;
-    out[9] =  0;
-    out[10]= -2.f/(zFar-zNear);
-    out[11]= 0;
-
-    out[12]= -(right+left)/(right-left);
-    out[13]= -(top+bottom)/(top-bottom);
-    out[14]= -(zFar+zNear)/(zFar-zNear);
-    out[15]= 1.f;
+    memcpy(plot->gl_data->vertices, vertices, sizeof(vertices));
 }
 
-void DrawPlot(CPLPlot* plot)
+/**
+ * @brief Build the box data for each subplot in the figure. Each subplot is
+ * laid out in normalized device coordinates, subdividing the [-1..1] range
+ * in both X and Y for `rows` by `cols`.
+ */
+static void build_subplots_box_data(CPLFigure* fig, size_t rows, size_t cols, float margin)
 {
-    if (!plot || !plot->gl_data->is_data_loaded)
-    {
-        fprintf(stderr, "Error: Could not draw plot.\n");
+    if (!fig) {
+        printf("Error: Figure is NULL.\n");
         return;
     }
 
-    // Get window size
-    int fbW, fbH;
-    glfwGetFramebufferSize(plot->figure->renderer->window, &fbW, &fbH);
-    if(fbH<1) fbH=1;
+    for (size_t row = 0; row < rows; ++row) {
+        for (size_t col = 0; col < cols; ++col) {
+            size_t index = row * cols + col;
+            CPLPlot* plot = fig->plot[index];
+            if (!plot) {
+                printf("Error: Plot at index %zu is NULL.\n", index);
+                continue;
+            }
+            // Allocate the gl_data struct
+            plot->gl_data = (CPL_PLOT_GL*)malloc(sizeof(CPL_PLOT_GL));
+            if (!plot->gl_data) {
+                printf("Error: Could not allocate memory for subplot->gl_data.\n");
+                return;
+            }
+            memset(plot->gl_data, 0, sizeof(*plot->gl_data));
 
-    // Set up orthographic projection
+            // Divide the [-1..1] range into col columns, row rows
+            float total_margin_x = margin * (cols + 1);
+            float total_margin_y = margin * (rows + 1);
+
+            float subplot_width  = (2.0f - total_margin_x) / (float)cols;
+            float subplot_height = (2.0f - total_margin_y) / (float)rows;
+
+            // left edge of this subplot
+            float left = -1.0f + margin + col * (subplot_width + margin);
+            float right = left + subplot_width;
+            float bottom = -1.0f + margin + row * (subplot_height + margin);
+            float top = bottom + subplot_height;
+
+            // Box color is plot->bg_color. For example, black
+            float r = plot->bg_color.r;
+            float g = plot->bg_color.g;
+            float b = plot->bg_color.b;
+
+            float vertices[20] = {
+                // x,     y,      r, g, b
+                left,  top,    r, g, b,
+                right, top,    r, g, b,
+                right, bottom, r, g, b,
+                left,  bottom, r, g, b
+            };
+
+            memcpy(plot->gl_data->vertices, vertices, sizeof(vertices));
+
+            // Setup the buffer/VAO
+            setup_plot_box_shaders(plot);
+
+            // Mark data loaded
+            plot->gl_data->is_data_loaded = true;
+        }
+    }
+}
+
+#pragma endregion
+
+#pragma region Public API
+
+void DrawPlot(CPLPlot* plot)
+{
+    if (!plot || !plot->gl_data || !plot->gl_data->is_data_loaded) {
+        fprintf(stderr, "Error: Could not draw plot. Plot or data is not ready.\n");
+        return;
+    }
+
+    // Build an orthographic projection: -1..1 in X, -1..1 in Y
     float proj[16];
     makeOrthoMatrix(-1.0f, 1.0f, -1.0f, 1.0f, proj);
 
-    // Enable the shader program and set uniforms
+    // Use the figure's shader
     glUseProgram(plot->figure->renderer->programID);
+    // Set the projection matrix
     glUniformMatrix4fv(plot->figure->renderer->proj_mat, 1, GL_FALSE, proj);
 
-    // Draw the box
+    // Bind the VAO and draw
     glBindVertexArray(plot->gl_data->box_vao);
-
     glDrawArrays(GL_LINE_LOOP, 0, 4);
-    
-    // Clean up
     glBindVertexArray(0);
+
+    // Cleanup
     glUseProgram(0);
 }
 
 void AddPlot(CPLFigure* fig, CPLPlot* plot)
 {
-    if (!fig || !plot)
-    {
-        printf("Error: Could not add plot to figure.\n");
+    if (!fig || !plot) {
+        printf("Error: Could not add plot to figure. Null pointer.\n");
         return;
     }
 
-    // create array of plots
+    // Create array of one plot
     fig->plot = (CPLPlot**)malloc(sizeof(CPLPlot*));
-    if (!fig->plot)
-    {
-        printf("Error: Could not allocate memory for plot.\n");
+    if (!fig->plot) {
+        printf("Error: Could not allocate memory for plot array.\n");
         return;
     }
-
     fig->plot[0] = plot;
     fig->num_plots = 1;
 
-    // Set the figure of the plot
+    // Associate the plot with the figure
     plot->figure = fig;
 
-    // Set the width and height of the plot
-    plot->width = fig->width;
+    // Set some defaults
+    plot->width  = fig->width;
     plot->height = fig->height;
+    plot->bg_color = COLOR_BLACK; // example
 
-    // Set the background color of the plot
-    plot->bg_color = COLOR_BLACK;
-
-    // set up the plot box data
+    // Build the single-plot box data
     build_plot_box_data(plot);
-
-    // set up the plot box shaders
     setup_plot_box_shaders(plot);
 
-    // set the data loaded flag
+    // Data is loaded
     plot->gl_data->is_data_loaded = true;
-    
 }
 
 void AddSubplots(CPLFigure* fig, size_t rows, size_t cols)
 {
-    if (!fig)
-    {
-        printf("Error: Could not add subplots to figure.\n");
+    if (!fig) {
+        printf("Error: Could not add subplots to figure. Figure is NULL.\n");
         return;
     }
 
-    // Allocate memory for the plots
-    fig->plot = (CPLPlot**)realloc(fig->plot, rows * cols * sizeof(CPLPlot*));
-    if (!fig->plot)
-    {
-        printf("Error: Could not reallocate memory for subplots.\n");
-        return;
-    }
     fig->num_plots = rows * cols;
-}
 
-void SetXRange(CPLPlot* plot, double x_range[2])
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set x-axis range.\n");
+    // Allocate an array of pointers to CPLPlot
+    fig->plot = (CPLPlot**)malloc(fig->num_plots * sizeof(CPLPlot*));
+    if (!fig->plot) {
+        printf("Error: Could not allocate memory for subplot array.\n");
         return;
     }
-    if (!x_range)
-    {
-        fprintf(stderr, "Error: x_range is NULL.\n");
-        return;
-    }
-    memcpy(plot->x_range, x_range, 2 * sizeof(double));
-}
 
-void SetYRange(CPLPlot* plot, double y_range[2])
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set y-axis range.\n");
-        return;
-    }
-    if (!y_range)
-    {
-        fprintf(stderr, "Error: y_range is NULL.\n");
-        return;
-    }
-    memcpy(plot->y_range, y_range, 2 * sizeof(double));
-}
-
-void SetZRange(CPLPlot* plot, double z_range[2])
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set z-axis range.\n");
-        return;
-    }
-    if (!z_range)
-    {
-        fprintf(stderr, "Error: z_range is NULL.\n");
-        return;
-    }
-    memcpy(plot->z_range, z_range, 2 * sizeof(double));
-}
-
-void SetXData(CPLPlot* plot, double* x_data, size_t num_xticks)
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set x-axis data.\n");
-        return;
-    }
-    if (!x_data)
-    {
-        fprintf(stderr, "Error: x_data is NULL.\n");
-        return;
-    }
-    // allocate memory for x_data if it hasn't been allocated yet
-    if (!plot->x_data)
-    {
-        plot->x_data = (double*)malloc(num_xticks * sizeof(double));
-        if (!plot->x_data)
-        {
-            fprintf(stderr, "Error: Could not allocate memory for x_data.\n");
+    // Create each subplot
+    for (size_t i = 0; i < fig->num_plots; i++) {
+        fig->plot[i] = (CPLPlot*)malloc(sizeof(CPLPlot));
+        if (!fig->plot[i]) {
+            printf("Error: Could not allocate memory for subplot %zu.\n", i);
             return;
         }
-    }
-    memcpy(plot->x_data, x_data, num_xticks * sizeof(double));
-    plot->num_xticks = num_xticks;
-}
+        memset(fig->plot[i], 0, sizeof(CPLPlot));
 
-void SetYData(CPLPlot* plot, double* y_data, size_t num_yticks)
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set y-axis data.\n");
-        return;
+        fig->plot[i]->figure = fig;         // associate with figure
+        fig->plot[i]->width  = fig->width / cols;
+        fig->plot[i]->height = fig->height / rows;
+        fig->plot[i]->bg_color = COLOR_BLACK; // pick a color
     }
-    if (!y_data)
-    {
-        fprintf(stderr, "Error: y_data is NULL.\n");
-        return;
-    }
-    // allocate memory for y_data if it hasn't been allocated yet
-    if (!plot->y_data)
-    {
-        plot->y_data = (double*)malloc(num_yticks * sizeof(double));
-        if (!plot->y_data)
-        {
-            fprintf(stderr, "Error: Could not allocate memory for y_data.\n");
-            return;
-        }
-    }
-    memcpy(plot->y_data, y_data, num_yticks * sizeof(double));
-    plot->num_yticks = num_yticks;
-}
 
-void SetZData(CPLPlot* plot, double* z_data, size_t num_zticks)
-{
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not set z-axis data.\n");
-        return;
-    }
-    if (!z_data)
-    {
-        fprintf(stderr, "Error: z_data is NULL.\n");
-        return;
-    }
-    // allocate memory for z_data if it hasn't been allocated yet
-    if (!plot->z_data)
-    {
-        plot->z_data = (double*)malloc(num_zticks * sizeof(double));
-        if (!plot->z_data)
-        {
-            fprintf(stderr, "Error: Could not allocate memory for z_data.\n");
-            return;
-        }
-    }
-    memcpy(plot->z_data, z_data, num_zticks * sizeof(double));
-    plot->num_zticks = num_zticks;
+    // Build each subplot's box data in NDC
+    build_subplots_box_data(fig, rows, cols, /* margin = */ 0.1f);
 }
-
 
 void FreePlot(CPLPlot* plot)
 {
-    if (!plot)
-    {
-        fprintf(stderr, "Error: Could not free plot.\n");
+    if (!plot) {
+        fprintf(stderr, "Error: Could not free plot. Plot is NULL.\n");
         return;
     }
 
-    // free any memory associated with the plot
-    if (plot->x_data) free(plot->x_data);
-    if (plot->y_data) free(plot->y_data);
-    if (plot->z_data) free(plot->z_data);
+    // Clean up GL objects
+    if (plot->gl_data) {
+        if (plot->gl_data->box_vbo)
+            glDeleteBuffers(1, &plot->gl_data->box_vbo);
+        if (plot->gl_data->box_vao)
+            glDeleteVertexArrays(1, &plot->gl_data->box_vao);
+        free(plot->gl_data);
+    }
 
-    // Free the plot
-    free(plot);
-    
+    // Example if you had data arrays:
+    // if (plot->x_data) free(plot->x_data);
+    // if (plot->y_data) free(plot->y_data);
+    // if (plot->z_data) free(plot->z_data);
+
+    // We do *not* free(plot) here because the caller might do so.
+    // But in your code, you do "free(fig->plot[i])" afterwards, so it's fine.
 }
+
+#pragma endregion

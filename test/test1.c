@@ -22,7 +22,9 @@ int main()
     }
 
     CPLPlot plot;
-    AddPlot(fig, &plot);
+    AddSubplots(fig, 2, 2);
+
+    // printf("Plotting parametric function: x(t) = 0.5 * t, y(t) = 0.5 * t^2\n");
 
     ShowFigure(fig);
 
