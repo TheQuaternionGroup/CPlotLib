@@ -1,386 +1,340 @@
-#include <stdlib.h>
-#include <math.h>
-#include <stdio.h>
-
 #include "CPLPlot.h"
-#include "CPLUtils.h"
+#include "CPLFigure.h"
+#include "utils/cpl_gl_utils.h"
+#include "utils/cpl_renderer.h"
 
-//-------------------------------------
-// Simple text placeholder
-//-------------------------------------
-// static void RenderText2D(const char *text, float x, float y, float r, float g, float b)
-// {
-//     (void)text; (void)x; (void)y; (void)r; (void)g; (void)b;
-// }
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
-//-------------------------------------
-// Axis lines
-//-------------------------------------
-static void BuildAxisData(void)
+#include <GLFW/glfw3.h>
+#include <GL/glew.h>
+
+struct CPL_PLOT_GL {
+    GLuint box_vbo;                 // The vertex buffer object
+    GLuint box_vao;                 // The vertex array object
+    size_t box_vbo_size;            // The size of the vertex buffer object
+    float vertices[20];             // The vertices of the plot
+    bool is_data_loaded;            // Whether or not the data has been loaded
+};
+
+static void build_plot_box_data(CPLPlot *plot)
 {
-    float axisData[4 * 5]; // 4 vertices => (x,y,r,g,b)
+    plot->gl_data = (CPL_PLOT_GL*)malloc(sizeof(CPL_PLOT_GL));
+    if (!plot->gl_data)
+    {
+        printf("Error: Could not allocate memory for plot data.\n");
+        return;
+    }
 
-    // X-axis from (s_minX,0) -> (s_maxX,0)
-    axisData[0] = s_minX;
-    axisData[1] = 0.f;
-    axisData[2] = 0.7f;
-    axisData[3] = 0.7f;
-    axisData[4] = 0.7f;
+    plot->gl_data->box_vbo = 0;
+    plot->gl_data->box_vao = 0;
 
-    axisData[5] = s_maxX;
-    axisData[6] = 0.f;
-    axisData[7] = 0.7f;
-    axisData[8] = 0.7f;
-    axisData[9] = 0.7f;
+    // Use normalized device coordinates (-1 to 1)
+    float margin = 0.1f; // 10% margin
+    float left = -1.0f + margin;
+    float right = 1.0f - margin;
+    float bottom = -1.0f + margin;
+    float top = 1.0f - margin;
 
-    // Y-axis from (0, s_minY) -> (0, s_maxY)
-    axisData[10] = 0.f;
-    axisData[11] = s_minY;
-    axisData[12] = 0.7f;
-    axisData[13] = 0.7f;
-    axisData[14] = 0.7f;
+    // Define vertices for a box counter-clockwise
+    float vertices[20] = {
+        // Position (x,y)    // Color (r,g,b)
+        left,  top,         0.0f, 0.0f, 0.0f,  // Top left
+        right, top,         0.0f, 0.0f, 0.0f,  // Top right
+        right, bottom,      0.0f, 0.0f, 0.0f,  // Bottom right
+        left,  bottom,      0.0f, 0.0f, 0.0f   // Bottom left
+    };
 
-    axisData[15] = 0.f;
-    axisData[16] = s_maxY;
-    axisData[17] = 0.7f;
-    axisData[18] = 0.7f;
-    axisData[19] = 0.7f;
+    memcpy(plot->gl_data->vertices, vertices, sizeof(vertices));
+}
 
-    s_axisCount = 4; // 2 lines => 4 vertices
+static void setup_plot_box_shaders(CPLPlot* plot)
+{
+    if (!plot)
+    {
+        printf("Error: Could not setup plot box shaders.\n");
+        return;
+    }
+    if (!plot->gl_data)
+    {
+        printf("Error: Plot data is NULL.\n");
+        return;
+    }
+    if (plot->gl_data->box_vao == 0) glGenVertexArrays(1, &plot->gl_data->box_vao);
+    if (plot->gl_data->box_vbo == 0) glGenBuffers(1, &plot->gl_data->box_vbo);
 
-    if (s_axisVAO == 0)
-        glGenVertexArrays(1, &s_axisVAO);
-    if (s_axisVBO == 0)
-        glGenBuffers(1, &s_axisVBO);
+    glBindVertexArray(plot->gl_data->box_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, plot->gl_data->box_vbo);
+    glBufferData(GL_ARRAY_BUFFER, 20 * sizeof(float), plot->gl_data->vertices, GL_STATIC_DRAW);
 
-    glBindVertexArray(s_axisVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, s_axisVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(axisData), axisData, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0); // position
+    glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
 
-    glEnableVertexAttribArray(1); // color
+    glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
 
-    glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-//-------------------------------------
-// Ticks
-//-------------------------------------
-static void DrawAxisTicks(Figure *fig, const double* ticks, int numTicks, char axis)
-{
-    if(!fig || !ticks || numTicks<=0) 
-        return;
-
-    float domainSize = (axis=='x') ? (s_maxY - s_minY) : (s_maxX - s_minX);
-    if(domainSize < 1e-14f) domainSize = 1.f;
-    float lineLen = 0.02f * domainSize;
-
-    // we store 2 vertices (x,y,r,g,b) per tick
-    float* data = (float*)malloc(numTicks * 2 * 5 * sizeof(float));
-    if(!data) return;
-
-    int idx=0;
-    for(int i=0; i<numTicks; i++)
-    {
-        float val = (float)ticks[i];
-        if(axis=='x')
-        {
-            float x=val;
-            float y1=-lineLen*0.5f;
-            float y2= lineLen*0.5f;
-
-            // vertex1
-            data[idx++] = x;
-            data[idx++] = y1;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            // vertex2
-            data[idx++] = x;
-            data[idx++] = y2;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-        }
-        else if(axis=='y')
-        {
-            float y=val;
-            float x1=-lineLen*0.5f;
-            float x2= lineLen*0.5f;
-
-            // vertex1
-            data[idx++] = x1;
-            data[idx++] = y;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            // vertex2
-            data[idx++] = x2;
-            data[idx++] = y;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-            data[idx++] = 0.8f;
-        }
-    }
-
-    // draw immediately
-    GLuint tmpVAO=0, tmpVBO=0;
-    glGenVertexArrays(1,&tmpVAO);
-    glGenBuffers(1,&tmpVBO);
-
-    glBindVertexArray(tmpVAO);
-    glBindBuffer(GL_ARRAY_BUFFER,tmpVBO);
-    glBufferData(GL_ARRAY_BUFFER, idx*sizeof(float), data, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)0);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(2*sizeof(float)));
-
-    glDrawArrays(GL_LINES,0,idx/5);
-
     glBindVertexArray(0);
-    glDeleteBuffers(1,&tmpVBO);
-    glDeleteVertexArrays(1,&tmpVAO);
-    free(data);
+    plot->gl_data->box_vbo_size = 4;
+
 }
 
-//-------------------------------------
-// Param Plot
-//-------------------------------------
-static void computeParamBounds(
-    double (*fx)(double),
-    double (*fy)(double),
-    double tMin,
-    double tMax,
-    int numSamples,
-    double* minX,
-    double* maxX,
-    double* minY,
-    double* maxY
-)
+static void makeOrthoMatrix(float left, float right, float bottom, float top, float* out)
 {
-    *minX = 1e30; *maxX = -1e30;
-    *minY = 1e30; *maxY = -1e30;
-    double dt = (tMax - tMin)/(numSamples - 1);
-    for(int i=0; i<numSamples; i++)
+    float zNear=-1.f, zFar=1.f;
+
+    if(fabsf(right-left)<1e-14f)  right=left+1.f;
+    if(fabsf(top-bottom)<1e-14f)  top=bottom+1.f;
+
+    out[0] =  2.f/(right-left);
+    out[1] =  0;
+    out[2] =  0;
+    out[3] =  0;
+
+    out[4] =  0;
+    out[5] =  2.f/(top-bottom);
+    out[6] =  0;
+    out[7] =  0;
+
+    out[8] =  0;
+    out[9] =  0;
+    out[10]= -2.f/(zFar-zNear);
+    out[11]= 0;
+
+    out[12]= -(right+left)/(right-left);
+    out[13]= -(top+bottom)/(top-bottom);
+    out[14]= -(zFar+zNear)/(zFar-zNear);
+    out[15]= 1.f;
+}
+
+void DrawPlot(CPLPlot* plot)
+{
+    if (!plot || !plot->gl_data->is_data_loaded)
     {
-        double t = tMin + i*dt;
-        double x = fx(t);
-        double y = fy(t);
-        if(x < *minX) *minX = x;
-        if(x > *maxX) *maxX = x;
-        if(y < *minY) *minY = y;
-        if(y > *maxY) *maxY = y;
-    }
-}
-
-static void expandBoundingBox(double minX, double maxX, double minY, double maxY)
-{
-    double rangeX = (maxX - minX), rangeY = (maxY - minY);
-    double marginX= fmax(0.1*rangeX, 0.1);
-    double marginY= fmax(0.1*rangeY, 0.1);
-    s_minX=(float)(minX - marginX);
-    s_maxX=(float)(maxX + marginX);
-    s_minY=(float)(minY - marginY);
-    s_maxY=(float)(maxY + marginY);
-}
-
-static void generateTicksIfNeeded(Figure* fig)
-{
-    if(!fig->xTicks)
-    {
-        fig->xTicks = (double*)calloc(8,sizeof(double));
-        fig->xTicksCount=7;
-        double step=(s_maxX - s_minX)/6.0;
-        for(int i=0;i<7;i++)
-        {
-            fig->xTicks[i]= s_minX + i*step;
-        }
-    }
-    if(!fig->yTicks)
-    {
-        fig->yTicks = (double*)calloc(8,sizeof(double));
-        fig->yTicksCount=7;
-        double step=(s_maxY - s_minY)/6.0;
-        for(int i=0;i<7;i++)
-        {
-            fig->yTicks[i]= s_minY + i*step;
-        }
-    }
-}
-
-static float* buildParam2DData(
-    double (*fx)(double),
-    double (*fy)(double),
-    double tMin,
-    double tMax,
-    int numSamples,
-    Color lineColor,
-    ColorCallback colorFn,
-    void* userData
-)
-{
-    float* data = (float*)malloc(numSamples * 5 * sizeof(float));
-    if(!data) return NULL;
-
-    double dt = (tMax - tMin)/(numSamples-1);
-    for(int i=0; i<numSamples; i++)
-    {
-        double t = tMin + i*dt;
-        double x = fx(t);
-        double y = fy(t);
-        Color c = (colorFn) ? colorFn(t,userData) : lineColor;
-
-        int idx = i*5;
-        data[idx]   = (float)x;
-        data[idx+1] = (float)y;
-        data[idx+2] = c.r;
-        data[idx+3] = c.g;
-        data[idx+4] = c.b;
-    }
-    return data;
-}
-
-static void setupParam2DVAOandVBO(int numSamples, float* data)
-{
-    if(s_curveVAO==0) glGenVertexArrays(1,&s_curveVAO);
-    if(s_curveVBO==0) glGenBuffers(1,&s_curveVBO);
-
-    glBindVertexArray(s_curveVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, s_curveVBO);
-    glBufferData(GL_ARRAY_BUFFER, numSamples*5*sizeof(float), data, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)0);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(2*sizeof(float)));
-
-    glBindBuffer(GL_ARRAY_BUFFER,0);
-    glBindVertexArray(0);
-    s_curveCount=(GLsizei)numSamples;
-}
-
-void PlotParam2D(
-    Figure* fig,
-    double (*fx)(double),
-    double (*fy)(double),
-    double tMin,
-    double tMax,
-    int numSamples,
-    Color lineColor,
-    ColorCallback colorFn,
-    void* userData
-)
-{
-    if(!fig || !fx || !fy || (numSamples<2) || (tMax<=tMin))
+        fprintf(stderr, "Error: Could not draw plot.\n");
         return;
+    }
 
-    double minX, maxX, minY, maxY;
-    computeParamBounds(fx, fy, tMin, tMax, numSamples, &minX, &maxX, &minY, &maxY);
-    expandBoundingBox(minX, maxX, minY, maxY);
-    generateTicksIfNeeded(fig);
-
-    float* data = buildParam2DData(fx, fy, tMin, tMax, numSamples, lineColor, colorFn, userData);
-    if(!data) return;
-
-    setupParam2DVAOandVBO(numSamples, data);
-    free(data);
-
-    BuildAxisData();
-    s_isDataLoaded=1;
-}
-
-//-------------------------------------
-// PlotDraw / ShowPlot
-//-------------------------------------
-
-void PlotDraw(Figure *fig)
-{
-    if(!fig||!s_isDataLoaded) return;
-
-    glUseProgram(fig->programID);
-
-    // 1) aspect ratio fix
+    // Get window size
     int fbW, fbH;
-    glfwGetFramebufferSize(fig->window,&fbW,&fbH);
+    glfwGetFramebufferSize(plot->figure->renderer->window, &fbW, &fbH);
     if(fbH<1) fbH=1;
-    float windowAspect = (float)fbW/(float)fbH;
 
-    float domainW=(s_maxX-s_minX);
-    float domainH=(s_maxY-s_minY);
-    if(domainH<1e-14f) domainH=1.f;
-
-    float domainAspect= domainW/domainH;
-
-    // letterbox or pillarbox
-    float left=s_minX;
-    float right=s_maxX;
-    float bottom=s_minY;
-    float top=s_maxY;
-
-    if(domainAspect>windowAspect)
-    {
-        float newH= domainW/windowAspect;
-        float cy=0.5f*(bottom+top);
-        bottom= cy-0.5f*newH;
-        top   = cy+0.5f*newH;
-    }
-    else
-    {
-        float newW= domainH*windowAspect;
-        float cx= 0.5f*(left+right);
-        left = cx-0.5f*newW;
-        right= cx+0.5f*newW;
-    }
-
-    // Ortho
+    // Set up orthographic projection
     float proj[16];
-    makeOrthoMatrix(left,right,bottom,top,proj);
-    glUniformMatrix4fv(fig->loc_u_projection,1,GL_FALSE,proj);
+    makeOrthoMatrix(-1.0f, 1.0f, -1.0f, 1.0f, proj);
 
-    // axis lines
-    glBindVertexArray(s_axisVAO);
-    glDrawArrays(GL_LINES,0,s_axisCount);
+    // Enable the shader program and set uniforms
+    glUseProgram(plot->figure->renderer->programID);
+    glUniformMatrix4fv(plot->figure->renderer->proj_mat, 1, GL_FALSE, proj);
 
-    // ticks
-    DrawAxisTicks(fig,fig->xTicks,fig->xTicksCount,'x');
-    DrawAxisTicks(fig,fig->yTicks,fig->yTicksCount,'y');
+    // Draw the box
+    glBindVertexArray(plot->gl_data->box_vao);
 
-    // curve
-    glBindVertexArray(s_curveVAO);
-    glDrawArrays(GL_LINE_STRIP,0,s_curveCount);
-
+    glDrawArrays(GL_LINE_LOOP, 0, 4);
+    
+    // Clean up
     glBindVertexArray(0);
     glUseProgram(0);
 }
 
-void ShowPlot(Figure *fig)
+void AddPlot(CPLFigure* fig, CPLPlot* plot)
 {
-    if(!fig) return;
-
-    while(FigureIsOpen(fig))
+    if (!fig || !plot)
     {
-        FigureClear(fig, COLOR_BLACK);
-        PlotDraw(fig);
-        FigureSwapBuffers(fig);
+        printf("Error: Could not add plot to figure.\n");
+        return;
     }
 
-    glDeleteVertexArrays(1,&s_curveVAO);
-    glDeleteBuffers(1,&s_curveVBO);
-    glDeleteVertexArrays(1,&s_axisVAO);
-    glDeleteBuffers(1,&s_axisVBO);
+    // create array of plots
+    fig->plot = (CPLPlot**)malloc(sizeof(CPLPlot*));
+    if (!fig->plot)
+    {
+        printf("Error: Could not allocate memory for plot.\n");
+        return;
+    }
 
-    FreeFigure(fig);
+    fig->plot[0] = plot;
+    fig->num_plots = 1;
 
-    s_curveVAO=0; s_curveVBO=0;
-    s_axisVAO=0; s_axisVBO=0;
-    s_curveCount=0; s_axisCount=0;
-    s_isDataLoaded=0;
+    // Set the figure of the plot
+    plot->figure = fig;
+
+    // Set the width and height of the plot
+    plot->width = fig->width;
+    plot->height = fig->height;
+
+    // Set the background color of the plot
+    plot->bg_color = COLOR_BLACK;
+
+    // set up the plot box data
+    build_plot_box_data(plot);
+
+    // set up the plot box shaders
+    setup_plot_box_shaders(plot);
+
+    // set the data loaded flag
+    plot->gl_data->is_data_loaded = true;
+    
+}
+
+void AddSubplots(CPLFigure* fig, size_t rows, size_t cols)
+{
+    if (!fig)
+    {
+        printf("Error: Could not add subplots to figure.\n");
+        return;
+    }
+
+    // Allocate memory for the plots
+    fig->plot = (CPLPlot**)realloc(fig->plot, rows * cols * sizeof(CPLPlot*));
+    if (!fig->plot)
+    {
+        printf("Error: Could not reallocate memory for subplots.\n");
+        return;
+    }
+    fig->num_plots = rows * cols;
+}
+
+void SetXRange(CPLPlot* plot, double x_range[2])
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set x-axis range.\n");
+        return;
+    }
+    if (!x_range)
+    {
+        fprintf(stderr, "Error: x_range is NULL.\n");
+        return;
+    }
+    memcpy(plot->x_range, x_range, 2 * sizeof(double));
+}
+
+void SetYRange(CPLPlot* plot, double y_range[2])
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set y-axis range.\n");
+        return;
+    }
+    if (!y_range)
+    {
+        fprintf(stderr, "Error: y_range is NULL.\n");
+        return;
+    }
+    memcpy(plot->y_range, y_range, 2 * sizeof(double));
+}
+
+void SetZRange(CPLPlot* plot, double z_range[2])
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set z-axis range.\n");
+        return;
+    }
+    if (!z_range)
+    {
+        fprintf(stderr, "Error: z_range is NULL.\n");
+        return;
+    }
+    memcpy(plot->z_range, z_range, 2 * sizeof(double));
+}
+
+void SetXData(CPLPlot* plot, double* x_data, size_t num_xticks)
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set x-axis data.\n");
+        return;
+    }
+    if (!x_data)
+    {
+        fprintf(stderr, "Error: x_data is NULL.\n");
+        return;
+    }
+    // allocate memory for x_data if it hasn't been allocated yet
+    if (!plot->x_data)
+    {
+        plot->x_data = (double*)malloc(num_xticks * sizeof(double));
+        if (!plot->x_data)
+        {
+            fprintf(stderr, "Error: Could not allocate memory for x_data.\n");
+            return;
+        }
+    }
+    memcpy(plot->x_data, x_data, num_xticks * sizeof(double));
+    plot->num_xticks = num_xticks;
+}
+
+void SetYData(CPLPlot* plot, double* y_data, size_t num_yticks)
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set y-axis data.\n");
+        return;
+    }
+    if (!y_data)
+    {
+        fprintf(stderr, "Error: y_data is NULL.\n");
+        return;
+    }
+    // allocate memory for y_data if it hasn't been allocated yet
+    if (!plot->y_data)
+    {
+        plot->y_data = (double*)malloc(num_yticks * sizeof(double));
+        if (!plot->y_data)
+        {
+            fprintf(stderr, "Error: Could not allocate memory for y_data.\n");
+            return;
+        }
+    }
+    memcpy(plot->y_data, y_data, num_yticks * sizeof(double));
+    plot->num_yticks = num_yticks;
+}
+
+void SetZData(CPLPlot* plot, double* z_data, size_t num_zticks)
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not set z-axis data.\n");
+        return;
+    }
+    if (!z_data)
+    {
+        fprintf(stderr, "Error: z_data is NULL.\n");
+        return;
+    }
+    // allocate memory for z_data if it hasn't been allocated yet
+    if (!plot->z_data)
+    {
+        plot->z_data = (double*)malloc(num_zticks * sizeof(double));
+        if (!plot->z_data)
+        {
+            fprintf(stderr, "Error: Could not allocate memory for z_data.\n");
+            return;
+        }
+    }
+    memcpy(plot->z_data, z_data, num_zticks * sizeof(double));
+    plot->num_zticks = num_zticks;
+}
+
+
+void FreePlot(CPLPlot* plot)
+{
+    if (!plot)
+    {
+        fprintf(stderr, "Error: Could not free plot.\n");
+        return;
+    }
+
+    // free any memory associated with the plot
+    if (plot->x_data) free(plot->x_data);
+    if (plot->y_data) free(plot->y_data);
+    if (plot->z_data) free(plot->z_data);
+
+    // Free the plot
+    free(plot);
+    
 }

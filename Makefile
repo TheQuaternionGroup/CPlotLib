@@ -6,15 +6,12 @@ SRC_DIR := src
 LIB_DIR := lib
 SHADER_DIR := shaders
 
-SRCS := $(wildcard $(SRC_DIR)/*.c)
+# Find source files in subdirectories
+SRCS := $(shell find $(SRC_DIR) -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 LIB := $(LIB_DIR)/libcpl.a
 
-# Look for glew and glfw3 libraries
-# CFLAGS += $(shell pkg-config --cflags glew glfw3)
-# LDFLAGS += $(shell pkg-config --libs glew glfw3)
-
-all: $(LIB) install-shaders
+all: $(LIB)
 
 $(LIB): $(OBJS) | $(LIB_DIR)
 	ar rcs $@ $^
@@ -22,14 +19,13 @@ $(LIB): $(OBJS) | $(LIB_DIR)
 $(LIB_DIR):
 	mkdir -p $(LIB_DIR)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+# Create obj/ subdirectory structure automatically
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
-
-install-shaders: | $(SHADER_DIR)
-	cp $(SHADER_DIR)/*.glsl $(LIB_DIR)/
 
 clean:
 	rm -f $(OBJS) $(LIB)

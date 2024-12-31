@@ -1,84 +1,76 @@
 #ifndef CPL_FIGURE_H
 #define CPL_FIGURE_H
 
+#include "CPLCore.h"
+#include "CPLColors.h"
+
+#include <stdlib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
-#include "CPLColors.h"
-
-/**
- * Opaque struct that holds the window, GL context, etc.
- */
-typedef struct Figure
+struct CPLFigure
 {
-    GLFWwindow* window;
+    CPLRenderer* renderer;      // The renderer for the figure
+    CPLPlot** plot;              // The plot to which this figure belongs
+    size_t num_plots;           // The number of plots in the figure
 
-    // The shader program we use for lines
-    GLuint programID;
-    GLint  loc_u_projection;
+    size_t width;               // The width of the figure
+    size_t height;              // The height of the figure
 
-    // size of the figure
-    int width;
-    int height;
+    Color bg_color;                // The color of the figure
+};
 
-    // axis labels
-    char xLabel[64];
-    char yLabel[64];
-    char zLabel[64];
-
-    // axis ticks
-    double *xTicks;
-    int xTicksCount;
-    double *yTicks;
-    int yTicksCount;
-    double *zTicks;
-    int zTicksCount;
-
-    // axis limits
-    double xMin, xMax;
-    double yMin, yMax;
-    double zMin, zMax;
-
-    // axis colors
-    Color xColor;
-    Color yColor;
-    Color zColor;
-} Figure;
-
-/**
- * Creates a window and sets up an OpenGL 3.3 core context.
+/*!
+ * @brief Creates a new figure.
+ * @param width The width of the figure.
+ * @param height The height of the figure.
+ * @param title The title of the figure.
+ * @return A pointer to the newly created figure.
  */
-Figure* CreateFigure(int width, int height, const char* title);
+CPLAPI CPLFigure* CreateFigure(size_t width, size_t height);
 
-/**
- * Returns true if the window is open and not signaled to close.
+/*!
+ * @brief Adds a plot to the figure.
+ * @param fig The figure to add the plot to.
+ * @param plot The plot to add.
  */
-int FigureIsOpen(Figure* fig);
+CPLAPI void AddPlot(CPLFigure* fig, CPLPlot* plot);
 
-/**
- * Clears the screen (background black).
+/*!
+ * @brief Adds subplots to the figure.
+ * @param fig The figure to add the subplots to.
+ * @param rows The number of rows of subplots.
+ * @param cols The number of columns of subplots.
  */
-void FigureClear(Figure* fig, Color bg);
+CPLAPI void AddSubplots(CPLFigure* fig, size_t rows, size_t cols);
 
-/**
- * Swap front/back buffers + poll events.
+/*!
+* @brief Runs the run loop for the plot window to display the plot.
+* @param plot The plot to display.
+*/
+CPLAPI void ShowFigure(CPLFigure* fig);
+
+/*!
+* @brief Saves the plot to a file.
+* @param plot The plot to save.
+* @param filename The name of the file to save the plot to.
+*/
+CPLAPI void SaveFigure(CPLFigure* fig, const char* filename);
+
+/*!
+ * @brief Draws the figure to the screen.
+ * @param fig The figure to draw.
  */
-void FigureSwapBuffers(Figure* fig);
+void DrawFigure(CPLFigure* fig);
 
-/**
- * Destroys the window, OpenGL context, and frees resources.
+/*!
+ * @brief Frees the memory associated with the figure.
+ * @param fig The figure to free.
  */
-void FreeFigure(Figure* fig);
+void FreeFigure(CPLFigure* fig);
 
-void SetAxisLabels(Figure* fig, const char* xLabel, const char* yLabel);
-
-void SetXaxis(Figure* fig, double *xTicks, int numTicks);
-
-void SetYaxis(Figure* fig, double *yTicks, int numTicks);
 
 #ifdef __cplusplus
 }

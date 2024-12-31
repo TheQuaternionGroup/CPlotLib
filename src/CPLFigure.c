@@ -1,174 +1,107 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "CPLFigure.h"
-#include "CPLUtils.h" 
-#include "CPLShaders.h"
+#include "CPLPlot.h"
+#include "utils/cpl_renderer.h"
 
-Figure* CreateFigure(int width, int height, const char* title)
+#include <stdio.h>
+
+CPLFigure* CreateFigure(size_t width, size_t height)
 {
-    if (!glfwInit())
-    {
-        fprintf(stderr, "Failed to init GLFW.\n");
-        return NULL;
-    }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT,GL_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    Figure* fig = (Figure*)calloc(1, sizeof(Figure));
+    // Allocate memory for the figure
+    CPLFigure* fig = (CPLFigure*)malloc(sizeof(CPLFigure));
     if (!fig)
     {
-        fprintf(stderr,"Failed to allocate Figure.\n");
-        glfwTerminate();
+        printf("Error: Could not allocate memory for figure.\n");
         return NULL;
     }
-
-    fig->window = glfwCreateWindow(width, height, title, NULL, NULL);
-    if(!fig->window)
+    // Initialize the renderer
+    fig->renderer = cpl_init_renderer(width, height);
+    if (!fig->renderer)
     {
-        fprintf(stderr,"Failed to create GLFW window.\n");
+        printf("Error: Could not initialize renderer.\n");
         free(fig);
-        glfwTerminate();
         return NULL;
     }
-    glfwMakeContextCurrent(fig->window);
-
-    glewExperimental = GL_TRUE;
-    if(glewInit() != GLEW_OK)
-    {
-        fprintf(stderr,"Failed to init GLEW.\n");
-        glfwDestroyWindow(fig->window);
-        free(fig);
-        glfwTerminate();
-        return NULL;
-    }
-    glViewport(0,0,width,height);
-
-    // Compile default line-drawing shaders 
-    char* vsrc = SHADER_VERTEX;
-    char* fsrc = SHADER_FRAGMENT;
-    // if(!vsrc || !fsrc)
-    // {
-    //     fprintf(stderr,"Failed to load shader files.\n");
-    //     if(vsrc) free(vsrc);
-    //     if(fsrc) free(fsrc);
-    //     glfwDestroyWindow(fig->window);
-    //     free(fig);
-    //     glfwTerminate();
-    //     return NULL;
-    // }
-    GLuint vs = CompileShader(vsrc, GL_VERTEX_SHADER);
-    GLuint fs = CompileShader(fsrc, GL_FRAGMENT_SHADER);
-    // free(vsrc);
-    // free(fsrc);
-
-    fig->programID = LinkProgram(vs, fs);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    fig->loc_u_projection = glGetUniformLocation(fig->programID, "u_projection");
-    if(fig->loc_u_projection < 0)
-    {
-        fprintf(stderr, "Warning: uniform 'u_projection' not found.\n");
-    }
-
-    // Enable alpha blending if needed
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+    // Set the width and height of the figure
     fig->width = width;
-    fig->height= height;
+    fig->height = height;
 
-    // default axis labels
-    strncpy(fig->xLabel, "X-Axis", sizeof(fig->xLabel)-1);
-    fig->xLabel[sizeof(fig->xLabel)-1] = '\0';
-    strncpy(fig->yLabel, "Y-Axis", sizeof(fig->yLabel)-1);
-    fig->yLabel[sizeof(fig->yLabel)-1] = '\0';
+    // Set the color of the figure
+    fig->bg_color = COLOR_WHITE;
 
     return fig;
 }
 
-int FigureIsOpen(Figure* fig)
+void ShowFigure(CPLFigure* fig)
 {
-    if(!fig) return 0;
-    return !glfwWindowShouldClose(fig->window);
-}
+    if (!fig)
+    {
+        printf("Error: Figure is NULL.\n");
+        return;
+    }
 
-void FigureClear(Figure* fig, Color bg)
-{
-    if(!fig) return;
+    // Main loop
+    while (!glfwWindowShouldClose(fig->renderer->window))
+    {
+        glClearColor(fig->bg_color.r, fig->bg_color.g, fig->bg_color.b, fig->bg_color.a);
+        // Clear the screen
+        int fb_width, fb_height;
+        glfwGetFramebufferSize(fig->renderer->window, &fb_width, &fb_height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glViewport(0, 0, fb_width, fb_height);
 
-    int fbWidth, fbHeight;
-    glfwGetFramebufferSize(fig->window, &fbWidth, &fbHeight);
-    glViewport(0, 0, fbWidth, fbHeight);
+        DrawPlot(fig->plot[0]);
+        // Poll for events
+        glfwPollEvents();
 
-    glClearColor(bg.r, bg.g, bg.b, bg.a);
-    glClear(GL_COLOR_BUFFER_BIT);
-}
+        if ( GLFW_PRESS == glfwGetKey( fig->renderer->window, GLFW_KEY_ESCAPE ) ) 
+        { 
+            glfwSetWindowShouldClose( fig->renderer->window, 1 ); 
+        }
 
-void FigureSwapBuffers(Figure* fig)
-{
-    if(!fig) return;
-    glfwSwapBuffers(fig->window);
-    glfwPollEvents();
-}
+        // Draw the plots
+        // if (!fig->plot)
+        // {
+        //     for (size_t i = 0; i < fig->num_plots; i++)
+        //     {
+        //         DrawPlot(fig->plot[i]);
+        //     }
+        // }
+        // Swap buffers
+        glfwSwapBuffers(fig->renderer->window);
 
-void FreeFigure(Figure* fig)
-{
-    if(!fig) return;
+    }
 
-    if(fig->xTicks) { free(fig->xTicks); fig->xTicks=NULL; }
-    if(fig->yTicks) { free(fig->yTicks); fig->yTicks=NULL; }
-    if(fig->zTicks) { free(fig->zTicks); fig->zTicks=NULL; }
-
-    if(fig->programID) glDeleteProgram(fig->programID);
-    if(fig->window)    glfwDestroyWindow(fig->window);
-
+    // Terminate GLFW
     glfwTerminate();
+
+    // Free the figure
+    FreeFigure(fig);
+}
+
+void FreeFigure(CPLFigure* fig)
+{
+    if (!fig)
+    {
+        printf("Error: Could not free figure.\n");
+        return;
+    }   
+
+    // free the renderer
+    cpl_free_renderer(fig->renderer);
+
+    // free the plots
+    // for (size_t i = 0; i < fig->num_plots; i++)
+    // {
+    //     if (fig->plot[i]->gl_data) {
+    //         if (fig->plot[i]->gl_data->box_vbo) glDeleteBuffers(1, &fig->plot[i]->gl_data->box_vbo);
+    //         if (fig->plot[i]->gl_data->box_vao) glDeleteVertexArrays(1, &fig->plot[i]->gl_data->box_vao);
+    //         free(fig->plot[i]->gl_data);
+    //     }
+    //     free(fig->plot[i]->x_data);
+    //     free(fig->plot[i]->y_data);
+    //     free(fig->plot[i]->z_data);
+    // }
+    free(fig->plot);
+
     free(fig);
-}
-
-void SetAxisLabels(Figure* fig, const char* xLabel, const char* yLabel)
-{
-    if(!fig) return;
-    if(xLabel)
-    {
-        strncpy(fig->xLabel, xLabel, sizeof(fig->xLabel)-1);
-        fig->xLabel[sizeof(fig->xLabel)-1] = '\0';
-    }
-    if(yLabel)
-    {
-        strncpy(fig->yLabel, yLabel, sizeof(fig->yLabel)-1);
-        fig->yLabel[sizeof(fig->yLabel)-1] = '\0';
-    }
-}
-
-void SetXaxis(Figure* fig, double *xTicks, int numTicks)
-{
-    if(!fig || !xTicks || numTicks<=0) return;
-
-    if(fig->xTicks) { free(fig->xTicks); fig->xTicks=NULL; }
-
-    fig->xTicks = (double*)malloc(numTicks*sizeof(double));
-    if(!fig->xTicks) return;
-    memcpy(fig->xTicks, xTicks, numTicks*sizeof(double));
-    fig->xTicksCount = numTicks;
-
-    // We won't assume sorted or that [0..count-1] is min..max
-    // We just store the user data. The next code can interpret it as needed.
-}
-
-void SetYaxis(Figure* fig, double *yTicks, int numTicks)
-{
-    if(!fig || !yTicks || numTicks<=0) return;
-
-    if(fig->yTicks) { free(fig->yTicks); fig->yTicks=NULL; }
-
-    fig->yTicks = (double*)malloc(numTicks*sizeof(double));
-    if(!fig->yTicks) return;
-    memcpy(fig->yTicks, yTicks, numTicks*sizeof(double));
-    fig->yTicksCount = numTicks;
 }
