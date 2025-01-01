@@ -95,6 +95,23 @@ void RGBtoHSV(float r, float g, float b, ColorHSV* out);
 #define COLOR_FIREBRICK (Color){0.7f, 0.13f, 0.13f, 1.0f}
 #define COLOR_DARKRED (Color){0.55f, 0.0f, 0.0f, 1.0f}
 
+// grays
+#define COLOR_DARKGRAY (Color){0.66f, 0.66f, 0.66f, 1.0f}
+#define COLOR_GRAY (Color){0.75f, 0.75f, 0.75f, 1.0f}
+#define COLOR_LIGHTGRAY (Color){0.83f, 0.83f, 0.83f, 1.0f}
+#define COLOR_GHOSTWHITE (Color){0.97f, 0.97f, 1.0f, 1.0f}
+#define COLOR_WHITESMOKE (Color){0.96f, 0.96f, 0.96f, 1.0f}
+#define COLOR_GAINSBORO (Color){0.86f, 0.86f, 0.86f, 1.0f}
+#define COLOR_FLORALWHITE (Color){1.0f, 0.98f, 0.94f, 1.0f}
+#define COLOR_OLDLACE (Color){0.99f, 0.96f, 0.9f, 1.0f}
+#define COLOR_LINEN (Color){0.98f, 0.94f, 0.9f, 1.0f}
+#define COLOR_ANTIQUEWHITE (Color){0.98f, 0.92f, 0.84f, 1.0f}
+#define COLOR_PAPAYAWHIP (Color){1.0f, 0.94f, 0.84f, 1.0f}
+#define COLOR_BLANCHEDALMOND (Color){1.0f, 0.92f, 0.8f, 1.0f}
+#define COLOR_BISQUE (Color){1.0f, 0.89f, 0.77f, 1.0f}
+#define COLOR_PEACHPUFF (Color){1.0f, 0.85f, 0.73f, 1.0f}
+#define COLOR_NAVAJOWHITE (Color){1.0f, 0.87f, 0.68f, 1.0f}
+
 #ifdef __cplusplus
 }
 #endif
