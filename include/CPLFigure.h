@@ -32,21 +32,6 @@ struct CPLFigure
 CPLAPI CPLFigure* CreateFigure(size_t width, size_t height);
 
 /*!
- * @brief Adds a plot to the figure.
- * @param fig The figure to add the plot to.
- * @param plot The plot to add.
- */
-CPLAPI void AddPlot(CPLFigure* fig, CPLPlot* plot);
-
-/*!
- * @brief Adds subplots to the figure.
- * @param fig The figure to add the subplots to.
- * @param rows The number of rows of subplots.
- * @param cols The number of columns of subplots.
- */
-CPLAPI void AddSubplots(CPLFigure* fig, size_t rows, size_t cols);
-
-/*!
 * @brief Runs the run loop for the plot window to display the plot.
 * @param plot The plot to display.
 */
