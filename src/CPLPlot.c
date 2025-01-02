@@ -302,7 +302,7 @@ void PlotParamCurve(CPLPlot *plot, double *t_arr, double *x_arr, double *y_arr,
         plot->y_range[1] = 1.0;
     }
 
-    double x_range = x_arr[num_points - 1] - x_arr[0];
+    double x_range = t_arr[num_points - 1] - x_arr[0];
     size_t xi = round(x_range + 0.5) + 1;
 
     build_grid_data(plot, xi, xi);
