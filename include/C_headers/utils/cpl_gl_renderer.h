@@ -1,5 +1,5 @@
-#ifndef CPL_RENDERER_H
-#define CPL_RENDERER_H
+#ifndef CPL_GL_RENDERER_H
+#define CPL_GL_RENDERER_H
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -33,4 +33,4 @@ CPLRenderer* cpl_init_renderer(size_t width, size_t height);
 */
 void cpl_free_renderer(CPLRenderer* renderer);
 
-#endif // CPL_RENDERER_H
+#endif // CPL_GL_RENDERER_H
