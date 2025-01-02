@@ -89,17 +89,6 @@ public:
     }
 
     /**
-     * @brief Draws the figure on the screen.
-     *
-     * @note This does not free any resources.
-     */
-    void draw() const {
-        if (fig_) {
-            DrawFigure(fig_);
-        }
-    }
-
-    /**
      * @brief Adds a new plot to the figure.
      * @return A raw pointer to the newly added Plot.
      * @throws std::runtime_error if plot creation fails.

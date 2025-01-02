@@ -30,6 +30,7 @@ int main()
         return EXIT_FAILURE;
     }
 
+
     // Set X and Y ranges
     double x_range[2] = { 0.0, 2.0 * M_PI };
     double y_range[2] = { -2.0, 2.0 };
@@ -37,6 +38,7 @@ int main()
     SetYRange(plot, y_range);  // Set y-axis range
     // SetZRange(plot, z_range); // Optional if using 3D plots
 
+    ShowGrid(plot, false); // Show grid lines
     // Prepare data for sin(x)
     size_t num_points = 1001; // Increased for smoother curves
     double x_sin[1001];

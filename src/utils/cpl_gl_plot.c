@@ -1,7 +1,16 @@
 #include "C_headers/utils/cpl_gl_plot.h"
+#include "C_headers/CPLFigure.h"
+#include "C_headers/CPLPlot.h"
+#include "C_headers/utils/cpl_gl_renderer.h"
+#include "C_headers/utils/cpl_gl_utils.h"
+
+#include <math.h> // Added for ceil function
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 // Structure representing a single line within a plot.
 struct CPLLine {
@@ -20,6 +29,16 @@ struct CPL_PLOT_GL {
   float vertices[20];      // 4 vertices * (2 coords + 3 color)
   bool is_box_data_loaded; // Whether the box data is ready to be drawn
   float margin;            // Margin around the plot
+
+  CPL_GRID_GL *grid_data; // Pointer to grid data
+};
+
+struct CPL_GRID_GL {
+  GLuint grid_vbo;          // Vertex Buffer Object for the grid
+  GLuint grid_vao;          // Vertex Array Object for the grid
+  size_t grid_vbo_size;     // Number of vertices
+  float *vertices;          // Vertex data (positions and colors)
+  bool is_grid_data_loaded; // Whether the grid data is ready to be drawn
 };
 
 // Helper function to ensure plot->gl_data is allocated
@@ -32,40 +51,113 @@ static void ensure_gl_data(CPLPlot *plot) {
   }
 }
 
-void initialize_gl_data(CPLPlot *plot) {
-  ensure_gl_data(plot);
+// Helper function to ensure plot->gl_data->grid_data is allocated
+static void ensure_grid_data(CPLPlot *plot) {
+  if (!plot->grid_data) {
+    plot->grid_data = (CPL_GRID_GL *)calloc(1, sizeof(CPL_GRID_GL));
+    if (!plot->grid_data) {
+      fprintf(stderr,
+              "Error: Could not allocate memory for plot->grid_data.\n");
+    }
+  }
 }
 
-void generate_box_vertices(CPLPlot *plot, float left, float right, float bottom, float top) {
+void initialize_gl_data(CPLPlot *plot) { ensure_gl_data(plot); }
+
+void generate_box_vertices(CPLPlot *plot, float left, float right, float bottom,
+                           float top) {
   float r = plot->bg_color.r;
   float g = plot->bg_color.g;
   float b = plot->bg_color.b;
 
-  float vertices[20] = {
-      // x,    y,      r, g, b
-      left,  top,    r, g, b,
-      right, top,    r, g, b,
-      right, bottom, r, g, b,
-      left,  bottom, r, g, b
-  };
+  float vertices[20] = {// x,    y,      r, g, b
+                        left,  top,    r, g, b, right, top,    r, g, b,
+                        right, bottom, r, g, b, left,  bottom, r, g, b};
 
   memcpy(plot->gl_data->vertices, vertices, sizeof(vertices));
 }
 
-float normalize_coordinate(double value, double min, double max, float plot_start, float plot_size) {
+static void generate_grid_vertices(CPLPlot *plot, float left, float right,
+                                   float bottom, float top, size_t rows,
+                                   size_t cols) {
+    float r = plot->bg_color.r + 0.7f;
+    float g = plot->bg_color.g + 0.7f;
+    float b = plot->bg_color.b + 0.7f;
+    if (r > 1.0f)
+        r = 1.0f;
+    if (g > 1.0f)
+        g = 1.0f;
+    if (b > 1.0f)
+        b = 1.0f;
+
+    size_t total_lines = (rows + 1) + (cols + 1); // +1 to include the last line
+    size_t num_vertices = total_lines * 2;
+    float *vertices = (float *)malloc(num_vertices * 5 * sizeof(float));
+    if (!vertices) {
+        fprintf(stderr, "Error: Could not allocate memory for grid vertices.\n");
+        return;
+    }
+
+    size_t index = 0;
+    float step_x = (right - left) / (float)cols;
+    float step_y = (top - bottom) / (float)rows;
+
+    // Horizontal lines
+    for (size_t i = 0; i <= rows; i++) {
+        float y = bottom + i * step_y;
+        vertices[index++] = left;
+        vertices[index++] = y;
+        vertices[index++] = r;
+        vertices[index++] = g;
+        vertices[index++] = b;
+
+        vertices[index++] = right;
+        vertices[index++] = y;
+        vertices[index++] = r;
+        vertices[index++] = g;
+        vertices[index++] = b;
+    }
+
+    // Vertical lines
+    for (size_t i = 0; i <= cols; i++) {
+        float x = left + i * step_x;
+        vertices[index++] = x;
+        vertices[index++] = bottom;
+        vertices[index++] = r;
+        vertices[index++] = g;
+        vertices[index++] = b;
+
+        vertices[index++] = x;
+        vertices[index++] = top;
+        vertices[index++] = r;
+        vertices[index++] = g;
+        vertices[index++] = b;
+    }
+
+    plot->grid_data->vertices = vertices;
+    plot->grid_data->grid_vbo_size = num_vertices;
+}
+
+
+float normalize_coordinate(double value, double min, double max,
+                           float plot_start, float plot_size) {
   if (max - min == 0) {
     fprintf(stderr, "Error: Division by zero in normalization.\n");
     return plot_start;
   }
-  float normalized = ((value - min) / (float)(max - min)) * plot_size + plot_start;
-  if (normalized < plot_start) normalized = plot_start;
-  if (normalized > plot_start + plot_size) normalized = plot_start + plot_size;
+  float normalized =
+      ((value - min) / (float)(max - min)) * plot_size + plot_start;
+  if (normalized < plot_start)
+    normalized = plot_start;
+  if (normalized > plot_start + plot_size)
+    normalized = plot_start + plot_size;
   return normalized;
 }
 
 void setup_plot_box_shaders(CPLPlot *plot) {
   ensure_gl_data(plot);
-  if (!plot->gl_data) return;
+  if (!plot->gl_data)
+    return;
 
   if (plot->gl_data->box_vao == 0)
     glGenVertexArrays(1, &plot->gl_data->box_vao);
@@ -78,12 +170,11 @@ void setup_plot_box_shaders(CPLPlot *plot) {
                plot->gl_data->vertices, GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
-                        5 * sizeof(float), (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
 
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-                        5 * sizeof(float), (void *)(2 * sizeof(float)));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                        (void *)(2 * sizeof(float)));
 
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
@@ -91,9 +182,59 @@ void setup_plot_box_shaders(CPLPlot *plot) {
   plot->gl_data->box_vbo_size = 4;
 }
 
+void setup_grid_shaders(CPLPlot *plot) {
+    ensure_grid_data(plot);
+    if (!plot->grid_data)
+        return;
+
+    if (plot->grid_data->grid_vao == 0)
+        glGenVertexArrays(1, &plot->grid_data->grid_vao);
+    if (plot->grid_data->grid_vbo == 0)
+        glGenBuffers(1, &plot->grid_data->grid_vbo);
+
+    glBindVertexArray(plot->grid_data->grid_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, plot->grid_data->grid_vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 plot->grid_data->grid_vbo_size * 5 * sizeof(float),
+                 plot->grid_data->vertices, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                          (void *)(2 * sizeof(float)));
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    plot->grid_data->is_grid_data_loaded = true;
+}
+
+void build_grid_data(CPLPlot *plot, size_t rows, size_t cols) {
+    if (!plot->grid_data) {
+        plot->grid_data = (CPL_GRID_GL *)calloc(1, sizeof(CPL_GRID_GL));
+        if (!plot->grid_data) {
+            fprintf(stderr, "Error: Could not allocate memory for grid data.\n");
+            return;
+        }
+    }
+
+    // Extract subplot boundaries from plot->gl_data->vertices
+    // Assuming vertices are stored as {left, top, right, top, right, bottom, left, bottom}
+    float left = plot->gl_data->vertices[0];
+    float top = plot->gl_data->vertices[1];
+    float right = plot->gl_data->vertices[5];
+    float bottom = plot->gl_data->vertices[11];
+
+    generate_grid_vertices(plot, left, right, bottom, top, rows, cols);
+}
+
+
 void build_plot_box_data(CPLPlot *plot) {
   ensure_gl_data(plot);
-  if (!plot->gl_data) return;
+  if (!plot->gl_data)
+    return;
 
   if (plot->gl_data->margin == 0.0f) {
     plot->gl_data->margin = 0.1f;
@@ -108,7 +249,8 @@ void build_plot_box_data(CPLPlot *plot) {
   generate_box_vertices(plot, left, right, bottom, top);
 }
 
-void build_subplots_box_data(CPLFigure *fig, size_t rows, size_t cols, float margin) {
+void build_subplots_box_data(CPLFigure *fig, size_t rows, size_t cols,
+                             float margin) {
   if (!fig) {
     fprintf(stderr, "Error: Figure is NULL.\n");
     return;
@@ -128,7 +270,8 @@ void build_subplots_box_data(CPLFigure *fig, size_t rows, size_t cols, float mar
       }
 
       ensure_gl_data(plot);
-      if (!plot->gl_data) return;
+      if (!plot->gl_data)
+        return;
 
       plot->gl_data->margin = margin;
 
@@ -151,13 +294,16 @@ void build_subplots_box_data(CPLFigure *fig, size_t rows, size_t cols, float mar
 
 void setup_plot_line_shaders(CPLPlot *plot, CPLLine *line) {
   if (!plot->gl_data || !line) {
-    fprintf(stderr,
-            "Error: plot->gl_data or line is NULL in setup_plot_line_shaders.\n");
+    fprintf(
+        stderr,
+        "Error: plot->gl_data or line is NULL in setup_plot_line_shaders.\n");
     return;
   }
 
-  if (line->vao == 0) glGenVertexArrays(1, &line->vao);
-  if (line->vbo == 0) glGenBuffers(1, &line->vbo);
+  if (line->vao == 0)
+    glGenVertexArrays(1, &line->vao);
+  if (line->vbo == 0)
+    glGenBuffers(1, &line->vbo);
 
   glBindVertexArray(line->vao);
   glBindBuffer(GL_ARRAY_BUFFER, line->vbo);
@@ -165,12 +311,11 @@ void setup_plot_line_shaders(CPLPlot *plot, CPLLine *line) {
                line->vertices, GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
-                        5 * sizeof(float), (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
 
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-                        5 * sizeof(float), (void *)(2 * sizeof(float)));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                        (void *)(2 * sizeof(float)));
 
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
@@ -202,10 +347,10 @@ static CPLLine *create_new_line(CPLPlot *plot, size_t num_points) {
 }
 
 // Helper to fill line data
-static bool fill_line_data(CPLPlot *plot, CPLLine *line,
-                           double *x_arr, double *y_arr, double *t_arr,
-                           size_t num_points, ColorCallback color_fn,
-                           void *user_data, Color line_color, bool use_t) {
+static bool fill_line_data(CPLPlot *plot, CPLLine *line, double *x_arr,
+                           double *y_arr, double *t_arr, size_t num_points,
+                           ColorCallback color_fn, void *user_data,
+                           Color line_color, bool use_t) {
   double x_min = plot->x_range[0];
   double x_max = plot->x_range[1];
   double y_min = plot->y_range[0];
@@ -216,16 +361,18 @@ static bool fill_line_data(CPLPlot *plot, CPLLine *line,
     return false;
   }
 
-  float plot_left   = plot->gl_data->vertices[0];
-  float plot_top    = plot->gl_data->vertices[1];
-  float plot_right  = plot->gl_data->vertices[5];
+  float plot_left = plot->gl_data->vertices[0];
+  float plot_top = plot->gl_data->vertices[1];
+  float plot_right = plot->gl_data->vertices[5];
   float plot_bottom = plot->gl_data->vertices[11];
-  float plot_width  = plot_right - plot_left;
+  float plot_width = plot_right - plot_left;
   float plot_height = plot_top - plot_bottom;
 
   for (size_t i = 0; i < num_points; i++) {
-    float nx = normalize_coordinate(x_arr[i], x_min, x_max, plot_left, plot_width);
-    float ny = normalize_coordinate(y_arr[i], y_min, y_max, plot_bottom, plot_height);
+    float nx =
+        normalize_coordinate(x_arr[i], x_min, x_max, plot_left, plot_width);
+    float ny =
+        normalize_coordinate(y_arr[i], y_min, y_max, plot_bottom, plot_height);
 
     Color c = line_color;
     if (color_fn) {
@@ -250,11 +397,11 @@ void build_plot_line_data(CPLPlot *plot, double *x_arr, double *y_arr,
   }
 
   CPLLine *current_line = create_new_line(plot, num_points);
-  if (!current_line) return;
+  if (!current_line)
+    return;
 
-  if (!fill_line_data(plot, current_line, x_arr, y_arr,
-                      NULL, num_points, color_fn, user_data,
-                      line_color, false)) {
+  if (!fill_line_data(plot, current_line, x_arr, y_arr, NULL, num_points,
+                      color_fn, user_data, line_color, false)) {
     free(current_line->vertices);
     plot->num_lines--;
     return;
@@ -268,16 +415,16 @@ void build_plot_curve_data(CPLPlot *plot, double *t_arr, double *x_arr,
                            double *y_arr, size_t num_points, Color line_color,
                            ColorCallback color_fn, void *user_data) {
   if (!plot->gl_data) {
-    fprintf(stderr, "Error: plot->gl_data is NULL in build_plot_line_data.\n");
+    fprintf(stderr, "Error: plot->gl_data is NULL in build_plot_curve_data.\n");
     return;
   }
 
   CPLLine *current_line = create_new_line(plot, num_points);
-  if (!current_line) return;
+  if (!current_line)
+    return;
 
-  if (!fill_line_data(plot, current_line, x_arr, y_arr,
-                      t_arr, num_points, color_fn, user_data,
-                      line_color, true)) {
+  if (!fill_line_data(plot, current_line, x_arr, y_arr, t_arr, num_points,
+                      color_fn, user_data, line_color, true)) {
     free(current_line->vertices);
     plot->num_lines--;
     return;

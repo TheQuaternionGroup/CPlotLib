@@ -31,6 +31,7 @@ void create_and_plot(CPLFigure* fig, int subplot_index, double x_start, double x
     CPLPlot* plot = fig->plot[subplot_index];
     SetXRange(plot, (double[]){x_start, x_end});
     SetYRange(plot, (double[]){y_min, y_max});
+    // ShowGrid(plot, true);
     
     double x[POINTS];
     double y[POINTS];

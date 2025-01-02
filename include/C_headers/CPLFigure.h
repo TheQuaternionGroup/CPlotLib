@@ -45,12 +45,6 @@ CPLAPI void ShowFigure(CPLFigure* fig);
 CPLAPI void SaveFigure(CPLFigure* fig, const char* filename);
 
 /*!
- * @brief Draws the figure to the screen.
- * @param fig The figure to draw.
- */
-void DrawFigure(CPLFigure* fig);
-
-/*!
  * @brief Frees the memory associated with the figure.
  * @param fig The figure to free.
  */

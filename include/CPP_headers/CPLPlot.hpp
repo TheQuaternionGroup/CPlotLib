@@ -133,15 +133,6 @@ public:
     }
 
     /**
-     * @brief Renders the plot.
-     *
-     * @note This does not free any resources.
-     */
-    void draw() const {
-        ::DrawPlot(plot_);
-    }
-
-    /**
      * @brief Sets the title of the plot.
      * @param title The title string.
      */

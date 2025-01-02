@@ -1,3 +1,5 @@
+// CPLPlot.h
+
 /*
     * CPLPlot.h
     * This file contains the definition of the CPLPlot struct and its associated functions.
@@ -20,16 +22,18 @@ extern "C" {
 // Forward declaration of CPLFigure
 typedef struct CPLFigure CPLFigure;
 
-/*!
- * @brief Structure representing a single line within a plot.
- */
+// Forward declaration of CPLLine
 typedef struct CPLLine CPLLine;
+
+// Forward declaration of CPL_PLOT_GL
+typedef struct CPL_PLOT_GL CPL_PLOT_GL;
+
+// Forward declaration of CPL_GRID_GL
+typedef struct CPL_GRID_GL CPL_GRID_GL;
 
 /*!
  * @brief Structure representing a plot within a figure.
  */
-typedef struct CPL_PLOT_GL CPL_PLOT_GL;
-
 typedef struct CPLPlot
 {
     CPLFigure* figure;          // The figure to which this plot belongs
@@ -46,13 +50,14 @@ typedef struct CPLPlot
     double y_range[2];          // The range of the y-axis
     double z_range[2];          // The range of the z-axis
 
-    bool show_grid;             // Whether or not to show the grid
+    bool show_grid;             // Flag to indicate if grid should be shown
     bool show_axes;             // Whether or not to show the axes
     bool show_ticks;            // Whether or not to show the ticks
 
     Color bg_color;             // The background color of the plot
 
     CPL_PLOT_GL* gl_data;       // The OpenGL data for the plot
+    CPL_GRID_GL* grid_data;     // The OpenGL data for the grid
 
     CPLLine* lines;             // Dynamic array of lines
     size_t num_lines;           // Number of lines in the plot
@@ -122,6 +127,17 @@ CPLAPI void Plot(
     void* user_data
 );
 
+/*!
+ * @brief Adds a parametric curve to the plot.
+ * @param plot The plot to add the curve to.
+ * @param t_arr Array of parameter values.
+ * @param x_arr Array of x-coordinates.
+ * @param y_arr Array of y-coordinates.
+ * @param num_points Number of points in the arrays.
+ * @param line_color The color of the curve.
+ * @param color_fn Optional callback to determine color dynamically.
+ * @param user_data Optional user data for the color callback.
+ */
 CPLAPI void PlotParamCurve(
     CPLPlot* plot,
     double* t_arr,
@@ -134,16 +150,24 @@ CPLAPI void PlotParamCurve(
 );
 
 /*!
+ * @brief Enables or disables grid display for the plot.
+ * @param plot The plot to modify.
+ * @param show True to show the grid, false to hide.
+ */
+CPLAPI void ShowGrid(CPLPlot* plot, bool show);
+
+/*!
  * @brief Renders the plot.
  * @param plot The plot to render.
  */
-CPLAPI void DrawPlot(CPLPlot* plot);
+void DrawPlot(CPLPlot* plot);
 
 /*!
  * @brief Frees the memory associated with the plot.
  * @param plot The plot to free.
  */
-CPLAPI void FreePlot(CPLPlot* plot);
+void FreePlot(CPLPlot* plot);
+
 
 #ifdef __cplusplus
 }
