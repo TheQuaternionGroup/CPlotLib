@@ -1,6 +1,6 @@
-#include "CPLFigure.h"
-#include "CPLPlot.h"
-#include "utils/cpl_renderer.h"
+#include "C_headers/CPLFigure.h"
+#include "C_headers/CPLPlot.h"
+#include "C_headers/utils/cpl_renderer.h"
 
 #include <stdio.h>
 #include <stdlib.h>

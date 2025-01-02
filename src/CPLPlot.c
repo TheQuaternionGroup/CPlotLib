@@ -1,9 +1,9 @@
 // CPLPlot.c
 
-#include "CPLPlot.h"
-#include "CPLFigure.h"
-#include "utils/cpl_gl_utils.h"
-#include "utils/cpl_renderer.h"
+#include "C_headers/CPLPlot.h"
+#include "C_headers/CPLFigure.h"
+#include "C_headers/utils/cpl_gl_utils.h"
+#include "C_headers/utils/cpl_renderer.h"
 
 #include <stdlib.h>
 #include <stdio.h>

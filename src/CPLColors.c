@@ -1,4 +1,4 @@
-#include "CPLColors.h"
+#include "C_headers/CPLColors.h"
 
 void HSVtoRGB(float h, float s, float v, Color* out)
 {

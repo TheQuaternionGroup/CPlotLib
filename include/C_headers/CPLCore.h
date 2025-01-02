@@ -5,10 +5,18 @@
 // Core definitions
 //--------------------------------
 
-// define bool type
-#define bool unsigned char
-#define true 1
-#define false 0
+#ifndef __cplusplus
+    // Define bool type only for C
+    #ifndef bool
+        #define bool unsigned char
+    #endif
+    #ifndef true
+        #define true 1
+    #endif
+    #ifndef false
+        #define false 0
+    #endif
+#endif // __cplusplus
 
 // Set up the API for exporting functions
 #if defined(_MSC_VER)
@@ -30,9 +38,17 @@
 //--------------------------------
 // Structs
 //--------------------------------
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// For C code
 typedef struct CPLRenderer CPLRenderer;
 typedef struct CPLFigure CPLFigure;
 typedef struct CPLPlot CPLPlot;
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CPL_CORE_H

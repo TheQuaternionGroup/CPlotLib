@@ -1,10 +1,9 @@
-#include "utils/cpl_renderer.h"
-#include "utils/cpl_gl_utils.h"
-#include "CPLColors.h"
+#include "C_headers/utils/cpl_renderer.h"
+#include "C_headers/utils/cpl_gl_utils.h"
+#include "C_headers/CPLColors.h"
 
 #include <stdlib.h>
 #include <stdio.h>
-
 
 CPLRenderer* cpl_init_renderer(size_t width, size_t height)
 {
