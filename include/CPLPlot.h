@@ -122,6 +122,17 @@ CPLAPI void Plot(
     void* user_data
 );
 
+CPLAPI void PlotParamCurve(
+    CPLPlot* plot,
+    double* t_arr,
+    double* x_arr,
+    double* y_arr,
+    size_t num_points,
+    Color line_color,
+    ColorCallback color_fn,
+    void* user_data
+);
+
 /*!
  * @brief Renders the plot.
  * @param plot The plot to render.

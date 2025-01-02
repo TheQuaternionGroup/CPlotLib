@@ -279,6 +279,84 @@ static void build_plot_line_data(CPLPlot* plot, double* x_arr, double* y_arr, si
     current_line->is_data_loaded = true;
 }
 
+static void build_plot_curve_data(CPLPlot* plot, double* t_arr, double* x_arr, double* y_arr, size_t num_points, Color line_color, ColorCallback color_fn, void* user_data)
+{
+    if (!plot->gl_data) {
+        fprintf(stderr, "Error: plot->gl_data is NULL in build_plot_line_data.\n");
+        return;
+    }
+
+    // Reallocate the lines array to accommodate the new line.
+    CPLLine* new_lines = (CPLLine*)realloc(plot->lines, (plot->num_lines + 1) * sizeof(CPLLine));
+    if (!new_lines) {
+        fprintf(stderr, "Error: Could not allocate memory for new line.\n");
+        return;
+    }
+    plot->lines = new_lines;
+    CPLLine* current_line = &plot->lines[plot->num_lines];
+    plot->num_lines += 1;
+
+    // Initialize the new line.
+    current_line->vbo = 0;
+    current_line->vao = 0;
+    current_line->vbo_size = num_points;
+    current_line->is_data_loaded = false;
+    current_line->vertices = (float*)malloc(num_points * 5 * sizeof(float)); // 2 for position, 3 for color
+    if (!current_line->vertices) {
+        fprintf(stderr, "Error: Could not allocate memory for line vertices.\n");
+        plot->num_lines -= 1;
+        return;
+    }
+
+    double x_min = plot->x_range[0];
+    double x_max = plot->x_range[1];
+    double y_min = plot->y_range[0];
+    double y_max = plot->y_range[1];
+
+    // Prevent division by zero.
+    if (x_max - x_min == 0 || y_max - y_min == 0) {
+        fprintf(stderr, "Error: Invalid range for normalization.\n");
+        free(current_line->vertices);
+        plot->num_lines -= 1;
+        return;
+    }
+
+    // Extract plot's box coordinates from gl_data->vertices.
+    // Each vertex has 5 floats: x, y, r, g, b
+    // Vertex 0: left, top
+    // Vertex 1: right, top
+    // Vertex 2: right, bottom
+    // Vertex 3: left, bottom
+    float plot_left = plot->gl_data->vertices[0];
+    float plot_top = plot->gl_data->vertices[1];
+    float plot_right = plot->gl_data->vertices[5];
+    float plot_bottom = plot->gl_data->vertices[11];
+    float plot_width = plot_right - plot_left;
+    float plot_height = plot_top - plot_bottom;
+
+    // Build the line data by normalizing each point.
+    for (size_t i = 0; i < num_points; i++)
+    {
+        float normalized_x = normalize_coordinate(x_arr[i], x_min, x_max, plot_left, plot_width);
+        float normalized_y = normalize_coordinate(y_arr[i], y_min, y_max, plot_bottom, plot_height); // Correctly using plot_height
+
+        // Determine the color for this vertex.
+        Color c = (color_fn) ? color_fn(t_arr[i], user_data) : line_color;
+
+        current_line->vertices[i * 5 + 0] = normalized_x;
+        current_line->vertices[i * 5 + 1] = normalized_y;
+        current_line->vertices[i * 5 + 2] = c.r;
+        current_line->vertices[i * 5 + 3] = c.g;
+        current_line->vertices[i * 5 + 4] = c.b;
+    }
+
+    // Setup the line shaders and buffers.
+    setup_plot_line_shaders(plot, current_line);
+
+    // Mark data as loaded.
+    current_line->is_data_loaded = true;
+}
+
 #pragma region Private API
 
 void DrawPlot(CPLPlot* plot)
@@ -488,6 +566,36 @@ CPLAPI void Plot(
 
     // Build the line data.
     build_plot_line_data(plot, x_arr, y_arr, num_points, line_color, color_fn, user_data);
+}
+
+void PlotParamCurve(
+    CPLPlot* plot,
+    double* t_arr,
+    double* x_arr,
+    double* y_arr,
+    size_t num_points,
+    Color line_color,
+    ColorCallback color_fn,
+    void* user_data
+)
+{
+    if (!plot || !t_arr || !x_arr || !y_arr || num_points == 0) {
+        fprintf(stderr, "Error: Could not plot parametric curve. Invalid input.\n");
+        return;
+    }
+
+    // Set default ranges if not set.
+    if (plot->x_range[0] == plot->x_range[1]) {
+        plot->x_range[0] = 0.0;
+        plot->x_range[1] = 1.0;
+    }
+    if (plot->y_range[0] == plot->y_range[1]) {
+        plot->y_range[0] = 0.0;
+        plot->y_range[1] = 1.0;
+    }
+
+    // Build the line data.
+    build_plot_curve_data(plot, t_arr, x_arr, y_arr, num_points, line_color, color_fn, user_data);
 }
 
 void SetXRange(CPLPlot* plot, double x_range[2])
