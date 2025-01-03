@@ -38,7 +38,7 @@ int main()
     SetYRange(plot, y_range);  // Set y-axis range
     // SetZRange(plot, z_range); // Optional if using 3D plots
 
-    ShowGrid(plot, false); // Show grid lines
+    // ShowGrid(plot, true); // Show grid lines
     // Prepare data for sin(x)
     size_t num_points = 1001; // Increased for smoother curves
     double x_sin[1001];
