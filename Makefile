@@ -1,5 +1,13 @@
 CC := gcc
-CFLAGS := -Iinclude -Wall -Wextra -O2 
+CFLAGS := -Iinclude -Wall -Wextra -O2
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+OPENGL_FLAGS = -framework OpenGL
+CC := clang
+else
+OPENGL_FLAGS = -lGL
+endif
 
 OBJ_DIR := obj
 SRC_DIR := src
@@ -35,8 +43,8 @@ $(TEST_BUILD_DIR):
 	mkdir -p $(TEST_BUILD_DIR)
 
 test: $(LIB) | $(TEST_BUILD_DIR)
-	clang $(TEST_DIR)/test2.c -L$(LIB_DIR) -Iinclude -lcpl -o $(TEST_BUILD_DIR)/test2 \
-		-framework OpenGL -lm $(shell pkg-config --cflags --libs glew glfw3)
+	$(CC) $(CFLAGS) $(TEST_DIR)/test2.c -L$(LIB_DIR) -Iinclude -lcpl -o $(TEST_BUILD_DIR)/test2 \
+	$(OPENGL_FLAGS) -lm $(shell pkg-config --cflags --libs glew glfw3)
 
 clean:
 	rm -rf $(OBJ_DIR)
