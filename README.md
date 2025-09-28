@@ -1,124 +1,206 @@
-# CPlotLib
+# CPlotLib v2.0
 
-## Overview
-**CPlotLib** is a small C/C++ plotting library using OpenGL, GLEW, and GLFW.  
-You can create one or more plots within a window to quickly visualize your data in 2D.
+A modern, optimized C/C++ plotting library using OpenGL for high-performance 2D data visualization.
 
-### Building the Library
-- Git clone repo into project or add as a submodule
-- Run `make` in the root folder to build `lib/libcpl.a`.
-- To clean up, run `make clean`.
+## Features
 
-### Linking and Compiling
-After building, link against `libcpl.a` and include the headers:
-```bash
-gcc  my_code.c -Llib -lcpl -lGL -lGLEW -lglfw -lm -o my_program
-```
+- **Clean API**: Simplified, consistent function naming and structure
+- **High Performance**: OpenGL-based rendering for smooth, fast plotting
+- **Dual Language Support**: Both C and C++ interfaces
+- **Modern C++**: RAII, move semantics, and exception safety
+- **Cross-Platform**: Works on macOS, Linux, and Windows
+- **Minimal Dependencies**: Only OpenGL, GLEW, and GLFW
 
-## Basic C Example
-Below is a **minimal** C snippet illustrating usage. It creates a plot of `sin(x)`:
+## Quick Start
+
+### C Example
 
 ```c
 #include "CPlotLib.h"
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 int main() {
-    // Create a figure (width=800, height=600)
-    CPLFigure* fig = CreateFigure(800, 600);
-    if (!fig) {
-        fprintf(stderr, "Failed to create figure.\n");
-        return EXIT_FAILURE;
+    // Create figure and plot
+    CPLFigure* fig = cpl_create_figure(800, 600);
+    CPLPlot* plot = cpl_add_plot(fig);
+    
+    // Set ranges and plot data
+    cpl_set_x_range(plot, 0.0, 2.0 * M_PI);
+    cpl_set_y_range(plot, -1.5, 1.5);
+    
+    // Generate and plot sine wave
+    double x[100], y[100];
+    for (int i = 0; i < 100; i++) {
+        x[i] = 2.0 * M_PI * i / 99.0;
+        y[i] = sin(x[i]);
     }
-
-    // Add a single plot to the figure
-    CPLPlot* plot = AddPlot(fig);
-    if (!plot) {
-        fprintf(stderr, "Failed to add plot.\n");
-        FreeFigure(fig);
-        return EXIT_FAILURE;
-    }
-
-    // Set axis ranges
-    double x_range[2] = {0.0, 2.0 * M_PI};
-    double y_range[2] = {-2.0, 2.0};
-    SetXRange(plot, x_range);
-    SetYRange(plot, y_range);
-
-    // Prepare data for sin(x)
-    size_t num_points = 1001;
-    double x_data[1001], y_data[1001];
-    for (size_t i = 0; i < num_points; i++) {
-        double t = (2.0 * M_PI) * ((double)i / (double)(num_points - 1));
-        x_data[i] = t;
-        y_data[i] = sin(t);
-    }
-
-    // Plot in red
-    Plot(plot, x_data, y_data, num_points, COLOR_RED, NULL, NULL);
-
-    // Display window
-    ShowFigure(fig);
-
-    return EXIT_SUCCESS;
+    cpl_plot(plot, x, y, 100, COLOR_RED, NULL, NULL);
+    
+    // Display
+    cpl_show_figure(fig);
+    return 0;
 }
 ```
 
----
-
-## Basic C++ Example
-In C++, the usage is similar, but you’ll typically use the `cpl::Figure` and `cpl::Plot` classes:
+### C++ Example
 
 ```cpp
 #include "CPlotLib.hpp"
 #include <vector>
 #include <cmath>
-#include <iostream>
 
 int main() {
     try {
-        // Create a figure
+        // Create figure and plot
         cpl::Figure fig(800, 600);
-
-        // Add a single plot
         auto plot = fig.addPlot();
-
-        // Set axis ranges
-        plot->setXRange(0.0, 5.0);
-        plot->setYRange(0.0, 50.0);
-
-        // Sample data
-        std::vector<double> x = {0, 1, 2, 3, 4, 5};
-        std::vector<double> y = {0, 10, 20, 30, 40, 50};
-
-        // Plot the data in red
+        
+        // Set ranges and properties
+        plot->setXRange(0.0, 2.0 * M_PI);
+        plot->setYRange(-1.5, 1.5);
+        plot->setTitle("Sine Wave");
+        plot->showGrid(true);
+        
+        // Generate and plot data
+        std::vector<double> x(100), y(100);
+        for (size_t i = 0; i < 100; ++i) {
+            x[i] = 2.0 * M_PI * i / 99.0;
+            y[i] = std::sin(x[i]);
+        }
         plot->plot(x, y, COLOR_RED);
-
-        // Display figure window
+        
+        // Display
         fig.show();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
-    catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
+    return 0;
 }
 ```
 
-Compile and link similarly:
+## Building
+
+### Prerequisites
+
+- OpenGL 3.3+
+- GLEW
+- GLFW3
+- CMake or Make
+
+### Using Make
+
 ```bash
-g++ -Iinclude my_code.cpp -Llib -lcpl -lGL -lGLEW -lglfw -lm -o my_program
+# Build library and examples
+make all
+
+# Build only the library
+make library
+
+# Build examples
+make examples
+
+# Run examples
+./examples/simple_example_c
+./examples/simple_example_cpp
 ```
 
----
+### Using CMake
 
-## TODO
-- **3D Plotting**: Extend library support for 3D charts.
-- **Event Handling**: Add mouse/keyboard interactions (zoom, pan, etc.).
-- **Export**: Implement functions to export plots as images (PNG, JPEG).
-- **Legend and Labels**: Include customizable legends and axis labels.
-- **Animations**: Enable real-time or animated updates for dynamic data.
+```bash
+mkdir build && cd build
+cmake ..
+make
+```
 
-Feel free to suggest or contribute more features!  
-**Happy plotting!**
+## API Reference
+
+### Core Functions
+
+- `cpl_create_figure(width, height)` - Create a new figure
+- `cpl_add_plot(figure)` - Add a plot to the figure
+- `cpl_show_figure(figure)` - Display the figure
+- `cpl_free_figure(figure)` - Free figure resources
+
+### Plot Configuration
+
+- `cpl_set_x_range(plot, min, max)` - Set X-axis range
+- `cpl_set_y_range(plot, min, max)` - Set Y-axis range
+- `cpl_set_title(plot, title)` - Set plot title
+- `cpl_show_grid(plot, show)` - Toggle grid display
+
+### Data Plotting
+
+- `cpl_plot(plot, x, y, n_points, color, color_fn, user_data)` - Plot data
+- `cpl_plot_parametric(plot, t, x, y, n_points, color, color_fn, user_data)` - Plot parametric curve
+
+## What's New in v2.0
+
+### Improvements
+
+1. **Unified API**: Consistent `cpl_` prefix for all functions
+2. **Better Error Handling**: Proper error checking and reporting
+3. **Memory Management**: Improved resource management and cleanup
+4. **Code Organization**: Cleaner separation of concerns
+5. **Performance**: Optimized rendering pipeline
+6. **Documentation**: Comprehensive API documentation
+
+### Breaking Changes
+
+- Function names now use `cpl_` prefix
+- Some function signatures have changed for consistency
+- C++ interface uses modern C++ features
+
+## Migration from v1.x
+
+### C API Changes
+
+```c
+// Old v1.x
+CPLFigure* fig = CreateFigure(800, 600);
+CPLPlot* plot = AddPlot(fig);
+SetXRange(plot, x_range);
+Plot(plot, x, y, n, COLOR_RED, NULL, NULL);
+ShowFigure(fig);
+
+// New v2.0
+CPLFigure* fig = cpl_create_figure(800, 600);
+CPLPlot* plot = cpl_add_plot(fig);
+cpl_set_x_range(plot, 0.0, 2.0 * M_PI);
+cpl_plot(plot, x, y, n, COLOR_RED, NULL, NULL);
+cpl_show_figure(fig);
+```
+
+### C++ API Changes
+
+```cpp
+// Old v1.x
+cpl::Figure fig(800, 600);
+auto plot = fig.addPlot();
+plot->setXRange(0.0, 2.0 * M_PI);
+plot->plot(x, y, COLOR_RED);
+
+// New v2.0 (mostly the same, but with better error handling)
+cpl::Figure fig(800, 600);
+auto plot = fig.addPlot();
+plot->setXRange(0.0, 2.0 * M_PI);
+plot->plot(x, y, COLOR_RED);
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Support
+
+- GitHub Issues: Report bugs and request features
+- Documentation: Check the examples and API reference
+- Community: Join discussions in GitHub Discussions
