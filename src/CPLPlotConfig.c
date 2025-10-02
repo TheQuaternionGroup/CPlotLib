@@ -2,9 +2,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <GL/glew.h>
 
 // Internal function declarations
 static void cpl_plot_error(const char* message);
+
+// External function declarations
+void cpl_setup_grid(CPLPlot* plot);
 
 // Plot configuration
 void cpl_set_x_range(CPLPlot* plot, double min, double max) {
@@ -46,6 +50,30 @@ void cpl_set_y_label(CPLPlot* plot, const char* label) {
 void cpl_show_grid(CPLPlot* plot, bool show) {
     if (!plot) return;
     plot->show_grid = show;
+}
+
+void cpl_show_axes(CPLPlot* plot, bool show) {
+    if (!plot) return;
+    plot->show_axes = show;
+    
+    // If grid is already loaded, regenerate it to update axis colors
+    if (plot->data && plot->data->grid_loaded) {
+        // Free existing grid OpenGL objects
+        if (plot->data->grid_vbo) {
+            glDeleteBuffers(1, &plot->data->grid_vbo);
+            plot->data->grid_vbo = 0;
+        }
+        if (plot->data->grid_vao) {
+            glDeleteVertexArrays(1, &plot->data->grid_vao);
+            plot->data->grid_vao = 0;
+        }
+        plot->data->grid_loaded = false;
+        
+        // Regenerate grid with new axis settings
+        if (plot->show_grid) {
+            cpl_setup_grid(plot);
+        }
+    }
 }
 
 void cpl_set_background_color(CPLPlot* plot, Color color) {

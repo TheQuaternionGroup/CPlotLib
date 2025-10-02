@@ -9,7 +9,7 @@
 
 // Internal function declarations
 static void cpl_setup_plot_box(CPLPlot* plot);
-static void cpl_setup_grid(CPLPlot* plot);
+void cpl_setup_grid(CPLPlot* plot);
 static void cpl_build_line_data(CPLPlot* plot, const double* x, const double* y, 
                                size_t n_points, Color color, 
                                CPLColorCallback color_fn, void* user_data);
@@ -113,13 +113,13 @@ static void cpl_setup_plot_box(CPLPlot* plot) {
     plot->data->box_loaded = true;
 }
 
-static void cpl_setup_grid(CPLPlot* plot) {
+void cpl_setup_grid(CPLPlot* plot) {
     if (!plot || !plot->data) return;
     
     // Generate grid lines
     const int grid_lines = 10;
     const int total_vertices = (grid_lines * 2 + 2) * 2; // horizontal + vertical lines
-    float* vertices = malloc(total_vertices * 5 * sizeof(float)); // 5 floats per vertex
+    float* vertices = (float*)malloc(total_vertices * 5 * sizeof(float)); // 5 floats per vertex
     
     if (!vertices) {
         cpl_plot_error("Failed to allocate memory for grid");
@@ -129,24 +129,41 @@ static void cpl_setup_grid(CPLPlot* plot) {
     int vertex_index = 0;
     float margin = plot->data->margin;
     
+    // Note: Center lines (axes) are determined by checking if i == grid_lines / 2
+    
     // Horizontal grid lines
     for (int i = 0; i <= grid_lines; i++) {
         float y = -1.0f + margin + (2.0f - 2.0f * margin) * i / grid_lines;
         
+        // Determine if this is the center line (axis)
+        bool is_axis = (i == grid_lines / 2);
+        
+        // Choose color: darker for axes, lighter for grid
+        float r, g, b;
+        if (is_axis && plot->show_axes) {
+            r = 0.2f;  // Dark gray for axes
+            g = 0.2f;
+            b = 0.2f;
+        } else {
+            r = 0.7f;  // Light gray for grid
+            g = 0.7f;
+            b = 0.7f;
+        }
+        
         // Start vertex
         vertices[vertex_index * 5 + 0] = -1.0f + margin;  // x
         vertices[vertex_index * 5 + 1] = y;               // y
-        vertices[vertex_index * 5 + 2] = 0.7f;            // r
-        vertices[vertex_index * 5 + 3] = 0.7f;            // g
-        vertices[vertex_index * 5 + 4] = 0.7f;            // b
+        vertices[vertex_index * 5 + 2] = r;               // r
+        vertices[vertex_index * 5 + 3] = g;               // g
+        vertices[vertex_index * 5 + 4] = b;               // b
         vertex_index++;
         
         // End vertex
         vertices[vertex_index * 5 + 0] = 1.0f - margin;   // x
         vertices[vertex_index * 5 + 1] = y;               // y
-        vertices[vertex_index * 5 + 2] = 0.7f;            // r
-        vertices[vertex_index * 5 + 3] = 0.7f;            // g
-        vertices[vertex_index * 5 + 4] = 0.7f;            // b
+        vertices[vertex_index * 5 + 2] = r;               // r
+        vertices[vertex_index * 5 + 3] = g;               // g
+        vertices[vertex_index * 5 + 4] = b;               // b
         vertex_index++;
     }
     
@@ -154,20 +171,35 @@ static void cpl_setup_grid(CPLPlot* plot) {
     for (int i = 0; i <= grid_lines; i++) {
         float x = -1.0f + margin + (2.0f - 2.0f * margin) * i / grid_lines;
         
+        // Determine if this is the center line (axis)
+        bool is_axis = (i == grid_lines / 2);
+        
+        // Choose color: darker for axes, lighter for grid
+        float r, g, b;
+        if (is_axis && plot->show_axes) {
+            r = 0.2f;  // Dark gray for axes
+            g = 0.2f;
+            b = 0.2f;
+        } else {
+            r = 0.7f;  // Light gray for grid
+            g = 0.7f;
+            b = 0.7f;
+        }
+        
         // Start vertex
         vertices[vertex_index * 5 + 0] = x;               // x
         vertices[vertex_index * 5 + 1] = -1.0f + margin;  // y
-        vertices[vertex_index * 5 + 2] = 0.7f;            // r
-        vertices[vertex_index * 5 + 3] = 0.7f;            // g
-        vertices[vertex_index * 5 + 4] = 0.7f;            // b
+        vertices[vertex_index * 5 + 2] = r;               // r
+        vertices[vertex_index * 5 + 3] = g;               // g
+        vertices[vertex_index * 5 + 4] = b;               // b
         vertex_index++;
         
         // End vertex
         vertices[vertex_index * 5 + 0] = x;               // x
         vertices[vertex_index * 5 + 1] = 1.0f - margin;   // y
-        vertices[vertex_index * 5 + 2] = 0.7f;            // r
-        vertices[vertex_index * 5 + 3] = 0.7f;            // g
-        vertices[vertex_index * 5 + 4] = 0.7f;            // b
+        vertices[vertex_index * 5 + 2] = r;               // r
+        vertices[vertex_index * 5 + 3] = g;               // g
+        vertices[vertex_index * 5 + 4] = b;               // b
         vertex_index++;
     }
     
@@ -220,7 +252,7 @@ static void cpl_build_line_data(CPLPlot* plot, const double* x, const double* y,
     line->vao = 0;
     line->num_vertices = n_points;
     line->is_loaded = false;
-    line->vertices = malloc(n_points * 5 * sizeof(float)); // 5 floats per vertex
+    line->vertices = (float*)malloc(n_points * 5 * sizeof(float)); // 5 floats per vertex
     
     if (!line->vertices) {
         cpl_plot_error("Failed to allocate memory for line vertices");

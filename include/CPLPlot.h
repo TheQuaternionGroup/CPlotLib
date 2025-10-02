@@ -121,6 +121,7 @@ void cpl_set_title(CPLPlot* plot, const char* title);
 void cpl_set_x_label(CPLPlot* plot, const char* label);
 void cpl_set_y_label(CPLPlot* plot, const char* label);
 void cpl_show_grid(CPLPlot* plot, bool show);
+void cpl_show_axes(CPLPlot* plot, bool show);
 void cpl_set_background_color(CPLPlot* plot, Color color);
 
 // Line thickness control

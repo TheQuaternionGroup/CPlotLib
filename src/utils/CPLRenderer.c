@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 CPLRenderer* cpl_create_renderer(size_t width, size_t height) {
-    CPLRenderer* renderer = malloc(sizeof(CPLRenderer));
+    CPLRenderer* renderer = (CPLRenderer*)malloc(sizeof(CPLRenderer));
     if (!renderer) {
         fprintf(stderr, "Failed to allocate renderer\n");
         return NULL;

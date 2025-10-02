@@ -82,6 +82,7 @@ public:
     
     // Display options
     void showGrid(bool show);
+    void showAxes(bool show);
     void setBackgroundColor(const Color& color);
     
     // Line thickness control

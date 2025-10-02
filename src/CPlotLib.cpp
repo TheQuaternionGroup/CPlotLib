@@ -171,6 +171,10 @@ void Plot::showGrid(bool show) {
     cpl_show_grid(plot_, show);
 }
 
+void Plot::showAxes(bool show) {
+    cpl_show_axes(plot_, show);
+}
+
 void Plot::setBackgroundColor(const Color& color) {
     cpl_set_background_color(plot_, color);
 }
